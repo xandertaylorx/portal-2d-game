@@ -9,7 +9,7 @@
     <RootNamespace>Portal2D</RootNamespace>
     <AssemblyName>Portal2D</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <Version>2.2.1</Version>
+    <Version>2.2.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
