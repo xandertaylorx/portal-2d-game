@@ -94,6 +94,36 @@ public static class Preview
         return o;
     }
 
+    /// <summary>README banner: a chamber backdrop, the title and the hero.</summary>
+    public static Pix Banner()
+    {
+        var lvl = Level(new World(Levels.All[8]), 0.5f);
+        var o = new Pix(640, 200);
+        for (int y = 0; y < o.H; y++)
+            for (int x = 0; x < o.W; x++)
+                o.Set(x, y, lvl.Get(x + 20, y + 60));
+        for (int y = 0; y < o.H; y++)
+            for (int x = 0; x < o.W; x++)
+                o.Shade(x, y, 0.55f * MathF.Max(0, 1 - x / 520f) + 0.15f);
+        void Outlined(string t, int x, int y, int sc, Color col)
+        {
+            foreach (var (dx, dy) in new[] { (-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (0, 2), (1, 2) })
+                PixelFont.DrawPix(o, t, x + dx * sc, y + dy * sc, sc, PP.Ink);
+            PixelFont.DrawPix(o, t, x, y, sc, col);
+        }
+        Outlined("PORTAL", 28, 38, 8, PP.CreamHi);
+        Outlined("2D", 28 + PixelFont.PixWidth("PORTAL", 8) + 18, 38, 8, PP.OrangeRamp[2]);
+        o.Rect(28, 108, 140, 4, PP.BlueRamp[2]);
+        o.Rect(176, 108, 140, 4, PP.OrangeRamp[2]);
+        PixelFont.DrawPix(o, "A PIXEL-ART PORTAL PUZZLER", 30, 126, 1, PP.Cream);
+        PixelFont.DrawPix(o, "18 CHAMBERS  +  ENDLESS RANDOM TESTS", 30, 140, 1, C(150, 158, 172));
+        var hero = new Pix(16, 16);
+        for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) hero.Set(x, y, Sprites.PlayerSheet.Get(x, y));
+        o.Draw(hero.Scaled(6), 470, 60, flipX: true);
+        o.Rect(478, 157, 80, 4, C(0, 0, 0, 90));
+        return o;
+    }
+
     public static Pix SpriteSheet()
     {
         var o = new Pix(220, 64);

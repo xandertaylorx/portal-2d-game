@@ -13,6 +13,7 @@ public sealed class App
     Screen screen = Screen.Menu;
     readonly SaveData save = SaveData.Load(Levels.All.Length);
     readonly Audio audio = new();
+    readonly Updater updater = new();
     Renderer renderer = null!;
     RenderTexture2D canvas;
     readonly World menuWorld = new(Levels.Menu);
@@ -29,7 +30,8 @@ public sealed class App
     readonly Random rng = new();
 
     bool paused, quit, showIntro;
-    float time, stateT, levelTime, wonT, hintT, accumulator;
+    float time, stateT, levelTime, wonT, hintT, hintEnd = 10, accumulator;
+    Vector2 startPos;
     int deaths;
     bool hintsOn = true;
     bool newBest;
@@ -66,6 +68,7 @@ public sealed class App
         if (save.Fullscreen) Raylib.ToggleBorderlessWindowed();
 
         camPos = new Vector2(menuWorld.WidthPx / 2, menuWorld.HeightPx / 2);
+        if (save.CheckUpdates && shotArgs.Length == 0) updater.CheckAsync();
         if (shotArgs.Length > 0 && RunShot()) { Shutdown(); return; }
 
         while (!Raylib.WindowShouldClose() && !quit)
@@ -95,7 +98,7 @@ public sealed class App
         string what = shotArgs[i + 1];
         float secs = float.Parse(shotArgs[i + 2], System.Globalization.CultureInfo.InvariantCulture);
         string file = shotArgs[i + 3];
-        string? script = i + 4 < shotArgs.Length ? shotArgs[i + 4] : null;
+        string? script = i + 4 < shotArgs.Length && !shotArgs[i + 4].StartsWith("--") ? shotArgs[i + 4] : null;
         if (what.StartsWith("level:"))
         {
             level = int.Parse(what[6..]) - 1;
@@ -115,6 +118,11 @@ public sealed class App
             var b = new Testing.Bot(world);
             bot = (randomMode ? random!.Solution(b) : Testing.Solutions.For(level, b)).GetEnumerator();
         }
+        int ri = Array.IndexOf(shotArgs, "--rec");
+        string? recDir = ri >= 0 ? shotArgs[ri + 1] : null;
+        float recStart = ri >= 0 ? float.Parse(shotArgs[ri + 2], System.Globalization.CultureInfo.InvariantCulture) : 0;
+        int recCount = 0;
+        if (recDir != null) { Directory.CreateDirectory(recDir); showIntro = false; hintsOn = false; }
         int frames = (int)(secs * 60);
         for (int f = 0; f < frames; f++)
         {
@@ -125,6 +133,13 @@ public sealed class App
                 if (world?.Player is { } pp && forcedInput.AimWorld == default) forcedInput.AimWorld = pp.Pos + new Vector2(200, 0);
             }
             Frame(1 / 60f);
+            if (recDir != null && f >= recStart * 60 && f % 2 == 0)
+            {
+                var fimg = Raylib.LoadImageFromTexture(canvas.Texture);
+                Raylib.ImageFlipVertical(ref fimg);
+                Raylib.ExportImage(fimg, Path.Combine(recDir, $"f{recCount++:0000}.png"));
+                Raylib.UnloadImage(fimg);
+            }
         }
         Raylib.BeginDrawing();
         Raylib.EndDrawing();
@@ -223,7 +238,15 @@ public sealed class App
             if (!paused)
             {
                 if (Raylib.IsKeyPressed(KeyboardKey.R)) { Go(() => LoadLevel(false)); }
-                if (Raylib.IsKeyPressed(KeyboardKey.H)) { hintsOn = !hintsOn; hintT = 0; }
+                if (Raylib.IsKeyPressed(KeyboardKey.H))
+                {
+                    bool visible = hintsOn && hintT < hintEnd;
+                    hintsOn = !visible;
+                    if (hintsOn) { hintT = showIntro ? 3.3f : 0; hintEnd = hintT + 8; }
+                }
+                // once the player gets going, let the hints get out of the way
+                if (w.Player is { } hp && hintT > 4 && hintEnd > hintT + 1.2f && Vector2.Distance(hp.Pos, startPos) > 220)
+                    hintEnd = hintT + 1.2f;
                 var input = forced ? forcedInput : ReadInput();
                 Step(w, dt, input, silent: false);
                 hintT += dt;
@@ -349,6 +372,8 @@ public sealed class App
         world = new World(CurrentDef);
         levelTime = 0;
         wonT = 0;
+        startPos = world.Player?.Pos ?? Vector2.Zero;
+        hintEnd = fresh ? 11f : 0;
         if (fresh) { deaths = 0; showIntro = true; hintT = 0; stateT = 0; }
         else showIntro = false;
         paused = false;
@@ -496,7 +521,41 @@ public sealed class App
 
         int done = save.Best.Count(b => b > 0);
         UI.Text($"{done}/{Levels.All.Length} CHAMBERS COMPLETE", new Vector2(x + 2, K.ScreenH - 30), 16, Dim);
-        UI.Text("V2.0  C# + RAYLIB", new Vector2(K.ScreenW - 24, K.ScreenH - 30), 16, Dim.WithAlpha(0.6f), UI.Align.Right);
+        UI.Text($"V{Updater.CurrentVersion}  C# + RAYLIB", new Vector2(K.ScreenW - 24, K.ScreenH - 30), 16, Dim.WithAlpha(0.6f), UI.Align.Right);
+        DrawUpdateBanner();
+    }
+
+    void DrawUpdateBanner()
+    {
+        var st = updater.Status;
+        if (st is not (Updater.State.Available or Updater.State.Downloading or Updater.State.Ready)
+            && !(st == Updater.State.Failed && updater.LatestVersion.Length > 0)) return;
+        var r = new Rectangle(K.ScreenW - 24 - 440, K.ScreenH - 160, 440, 112);
+        UI.Panel(r, 1, PP.Exit);
+        UI.Text($"UPDATE AVAILABLE  V{updater.LatestVersion}", new Vector2(r.X + 20, r.Y + 18), 16, PP.Exit);
+        UI.Text($"YOU HAVE V{Updater.CurrentVersion}", new Vector2(r.X + 20, r.Y + 40), 16, Dim);
+        var br = new Rectangle(r.X + 20, r.Y + 62, r.Width - 40, 36);
+        switch (st)
+        {
+            case Updater.State.Available:
+                if (UI.SmallButton("upd_go", br, "DOWNLOAD UPDATE", PP.Exit)) updater.DownloadAsync();
+                break;
+            case Updater.State.Downloading:
+                Raylib.DrawRectangleRec(br, C(30, 34, 44));
+                Raylib.DrawRectangle((int)br.X, (int)br.Y, (int)(br.Width * updater.Progress), (int)br.Height, PP.Exit);
+                UI.Text($"DOWNLOADING {(int)(updater.Progress * 100)}%", new Vector2(br.X + br.Width / 2, br.Y + br.Height / 2), 16, PP.CreamHi, UI.Align.Center, bold: true);
+                break;
+            case Updater.State.Ready:
+                if (UI.SmallButton("upd_restart", br, "RESTART & UPDATE", PP.Exit))
+                {
+                    save.Store();
+                    if (updater.LaunchSwapAndQuit()) quit = true;
+                }
+                break;
+            default:
+                UI.Text("UPDATE FAILED - " + updater.Error.ToUpperInvariant()[..Math.Min(34, updater.Error.Length)], new Vector2(r.X + 20, r.Y + 70), 16, C(255, 110, 100));
+                break;
+        }
     }
 
     void Header(string title, string sub)
@@ -569,9 +628,9 @@ public sealed class App
     void DrawOptions()
     {
         Header("OPTIONS", "AUDIO, VISUALS AND DISPLAY");
-        var panel = new Rectangle(K.ScreenW / 2f - 300, 150, 600, 500);
+        var panel = new Rectangle(K.ScreenW / 2f - 300, 140, 600, 560);
         UI.Panel(panel);
-        float x = panel.X + 40, w = panel.Width - 80, y = panel.Y + 64;
+        float x = panel.X + 40, w = panel.Width - 80, y = panel.Y + 60;
         float m = save.Master, s = save.Sfx, a = save.Ambience;
         bool changed = false;
         changed |= UI.Slider("vol_master", new Rectangle(x, y, w, 20), "MASTER VOLUME", ref m); y += 74;
@@ -589,6 +648,20 @@ public sealed class App
         if (UI.Toggle("opt_shake", new Rectangle(x - 10, y, w + 20, 54), "SCREEN SHAKE", ref sh)) { save.Shake = sh; changed = true; }
         y += 66;
         if (UI.Toggle("opt_fs", new Rectangle(x - 10, y, w + 20, 54), "FULLSCREEN (F11)", ref fs)) ToggleFullscreen();
+        y += 66;
+        bool cu = save.CheckUpdates;
+        if (UI.Toggle("opt_upd", new Rectangle(x - 10, y, w - 170, 54), "CHECK FOR UPDATES", ref cu)) { save.CheckUpdates = cu; changed = true; }
+        if (UI.SmallButton("opt_updnow", new Rectangle(x + w - 150, y + 6, 160, 42), "CHECK NOW")) updater.CheckAsync();
+        string us = updater.Status switch
+        {
+            Updater.State.Checking => "CHECKING...",
+            Updater.State.UpToDate => "UP TO DATE",
+            Updater.State.Available => $"V{updater.LatestVersion} AVAILABLE - SEE MAIN MENU",
+            Updater.State.Disabled => "DEVELOPMENT BUILD - UPDATES OFF",
+            Updater.State.Failed => "COULD NOT REACH UPDATE SERVER",
+            _ => ""
+        };
+        UI.Text($"VERSION {Updater.CurrentVersion}   {us}", new Vector2(x, y + 64), 16, Dim);
         if (changed && !UI.MouseDown) save.Store();
     }
 
@@ -687,7 +760,7 @@ public sealed class App
 
         if (def.Hints.Length > 0)
         {
-            float show = hintsOn ? Clamp01((hintT - (showIntro ? 3.3f : 0.2f)) * 3) * Clamp01((16 - hintT) / 1.5f) : 0;
+            float show = hintsOn ? Clamp01((hintT - (showIntro ? 3.3f : 0.2f)) * 3) * Clamp01((hintEnd - hintT) / 0.8f) : 0;
             if (show > 0.01f)
             {
                 float maxW = def.Hints.Max(hh => UI.Measure(hh, 16).X);
@@ -697,7 +770,7 @@ public sealed class App
                 for (int i = 0; i < def.Hints.Length; i++)
                     UI.Text(def.Hints[i], new Vector2(K.ScreenW / 2f + 4, hr.Y + 27 + i * 28), 16, PP.Cream.WithAlpha(show), UI.Align.Center);
             }
-            else if (!hintsOn || hintT > 16)
+            else if (!hintsOn || hintT > hintEnd)
                 UI.Text("H HINTS   R RESTART   ESC PAUSE", new Vector2(20, K.ScreenH - 30), 16, Dim.WithAlpha(0.6f));
         }
 

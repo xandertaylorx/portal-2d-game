@@ -60,8 +60,18 @@ public static class Program
             Render.Preview.Level(new World(def), 0.5f).Export(args[pv + 2], 2);
             return 0;
         }
+        int bn = Array.IndexOf(args, "--banner");
+        if (bn >= 0) { Render.Preview.Banner().Export(args[bn + 1], 2); return 0; }
         int sp = Array.IndexOf(args, "--sprites");
         if (sp >= 0) { Render.Preview.SpriteSheet().Export(args[sp + 1], 4); return 0; }
+        int su = Array.IndexOf(args, "--selftest-update");
+        if (su >= 0)
+        {
+            var u = new Updater();
+            u.StageLocal(args[su + 1]);
+            Console.WriteLine(u.LaunchSwapAndQuit() ? "swap launched" : "swap failed: " + u.Error);
+            return 0;
+        }
         new App(args).Run();
         return 0;
     }

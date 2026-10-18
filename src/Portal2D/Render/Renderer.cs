@@ -22,7 +22,7 @@ public sealed class Renderer
     readonly Dictionary<World, LevelArt> art = new();
     Shader windowShader;
     bool shaderOk;
-    int locCenter, locNrm, locUp, locRa, locRb, locTime, locTint, locCanvas, locOpen;
+    int locCenter, locNrm, locUp, locRa, locRb, locTime, locTint, locDeep, locCanvas, locOpen, locPar;
 
     public bool WindowsEnabled = true;
     public float Time;
@@ -36,32 +36,46 @@ public sealed class Renderer
         uniform vec2 center;
         uniform vec2 nrm;
         uniform vec2 upv;
-        uniform float ra;
-        uniform float rb;
+        uniform float ra;        // lens half-length along the portal (px)
+        uniform float rb;        // lens half-thickness across the portal (px)
+        uniform float par;       // parallax shift of the far view (px)
         uniform float time;
         uniform float open;
-        uniform vec4 tint;
+        uniform vec4 tint;       // bright portal colour
+        uniform vec4 deep;       // dark portal colour
         out vec4 finalColor;
         void main() {
-            vec2 p = floor(fragTexCoord) + 0.5;           // snap to the pixel grid
+            vec2 p = floor(fragTexCoord) + 0.5;
             vec2 d = p - center;
-            float u = dot(d, upv);
-            float v = -dot(d, nrm);                         // depth into the wall
-            float e = (u * u) / (ra * ra) + (v * v) / (rb * rb);
-            if (v < 0.0 || e > 1.0) discard;
-            float k = smoothstep(0.25, 1.0, e);
-            float ang = k * 0.9 * sin(time * 2.3 + e * 7.0) * open;
-            vec2 q = vec2(u * cos(ang) - v * sin(ang), u * sin(ang) + v * cos(ang)) * (1.0 + 0.12 * k);
-            vec2 sp = floor(center + upv * q.x - nrm * q.y) + 0.5;
-            vec4 col = texture(texture0, vec2(sp.x / canvas.x, 1.0 - sp.y / canvas.y));
+            float nu = dot(d, upv) / ra;
+            float nv = dot(d, nrm) / rb;               // +1 = room side
+            float e = nu * nu + nv * nv;
+            if (e > 1.0) discard;
+            float r = sqrt(e);
+            // fish-eye lens + swirl that grows toward the rim
+            float lens = mix(0.8, 1.2, r * r);
+            float sw = r * r * 0.7 * sin(time * 2.2 + r * 9.0) * open;
+            vec2 q = vec2(nu, nv) * lens;
+            q = vec2(q.x * cos(sw) - q.y * sin(sw), q.x * sin(sw) + q.y * cos(sw));
+            // tangent -> sideways on the far side, across -> how deep we look out of the other portal
+            float fu = q.x * 62.0 + par;
+            float fd = 2.0 + (0.5 - q.y * 0.5) * 150.0;
+            vec2 sp = clamp(floor(center + upv * fu - nrm * fd) + 0.5, vec2(0.5), canvas - 0.5);
+            vec3 col = texture(texture0, vec2(sp.x / canvas.x, 1.0 - sp.y / canvas.y)).rgb;
+            col = mix(col, deep.rgb, 0.04 + 0.35 * smoothstep(0.6, 1.0, r));
+            col = col * 1.18 + tint.rgb * 0.05;
+            float shine = nu * 0.6 - nv * 0.8;
+            if (r > 0.5 && r < 0.62 && shine > 0.3) col = mix(col, vec3(1.0), 0.25);
+            float ripple = sin(r * 24.0 - time * 5.0);
+            if (ripple > 0.94 && r > 0.25) col = mix(col, tint.rgb, 0.3);
             float checker = mod(floor(p.x) + floor(p.y), 2.0);
-            float band = smoothstep(0.55, 1.0, e);
-            col.rgb = mix(col.rgb, tint.rgb, band * 0.55);
-            if (e > 0.82 && checker > 0.5) col.rgb = mix(col.rgb, tint.rgb, 0.85);
-            if (e > 0.93) col.rgb = mix(tint.rgb, vec3(1.0), 0.35);
-            float scan = 0.94 + 0.06 * sin(p.y * 3.14159 + time * 6.0);
-            col.rgb *= scan * (0.82 + 0.18 * (1.0 - e));
-            finalColor = vec4(col.rgb, 1.0);
+            float ang = atan(nv, nu);
+            float spark = step(0.9, sin(ang * 3.0 - time * 5.0));
+            if (r > 0.78 && r <= 0.86 && checker > 0.5) col = mix(col, tint.rgb, 0.75);
+            if (r > 0.86) col = mix(deep.rgb, tint.rgb, 0.55);
+            if (r > 0.88 && r < 0.95) col = tint.rgb;
+            if (r > 0.86 && spark > 0.5) col = mix(tint.rgb, vec3(1.0), 0.8);
+            finalColor = vec4(col, 1.0);
         }
         """;
 
@@ -85,6 +99,8 @@ public sealed class Renderer
             locTint = Raylib.GetShaderLocation(windowShader, "tint");
             locCanvas = Raylib.GetShaderLocation(windowShader, "canvas");
             locOpen = Raylib.GetShaderLocation(windowShader, "open");
+            locDeep = Raylib.GetShaderLocation(windowShader, "deep");
+            locPar = Raylib.GetShaderLocation(windowShader, "par");
         }
     }
 
@@ -138,11 +154,14 @@ public sealed class Renderer
     public void DrawScene(World w, Camera2D cam, Vector2 eye)
     {
         DrawWorld(w, ViewRect(cam), drawPortals: false);
-        if (WindowsEnabled && w.Linked)
-            for (int i = 0; i < 2; i++)
-                DrawWindow(w.Portals[i]!, eye, cam, viewRt[i].Texture);
-        foreach (var p in w.Portals)
-            if (p != null) DrawPortal(p, w.Linked);
+        bool lenses = WindowsEnabled && shaderOk && w.Linked;
+        for (int i = 0; i < 2; i++)
+        {
+            var p = w.Portals[i];
+            if (p == null) continue;
+            if (lenses) DrawLens(w, p, eye, cam, viewRt[i].Texture);
+            else DrawPortal(p, w.Linked);
+        }
     }
 
     public static Rectangle ViewRect(Camera2D cam)
@@ -551,66 +570,75 @@ public sealed class Renderer
 
     // ================================================================ portals
 
-    void DrawWindow(Portal x, Vector2 eye, Camera2D cam, Texture2D tex)
+    /// <summary>Linked portal drawn as a lens showing a live, parallaxed view out of its partner.</summary>
+    void DrawLens(World w, Portal x, Vector2 eye, Camera2D cam, Texture2D tex)
     {
-        float open = EaseOutCubic(x.Open);
-        float dist = Vector2.Distance(eye, x.Center);
-        float near = Clamp01(1 - dist / 700f);
-        bool inFront = Vector2.Dot(eye - x.Center, x.Normal) > 0;
-        float ra = (24 + 10 * near) * open;
-        float rb = (26 + 54 * near * near * (inFront ? 1 : 0.4f)) * open;
-        if (ra < 1 || rb < 1) return;
-        var col = x.Color == PortalColor.Blue ? PP.BlueRamp[2] : PP.OrangeRamp[2];
-
-        // quad covering the half-ellipse behind the portal (world units)
-        float raW = ra / K.Px + 4, rbW = rb / K.Px + 4;
+        float open = EaseOutBack(x.Open);
+        var tint = x.Color == PortalColor.Blue ? PP.BlueRamp[2] : PP.OrangeRamp[2];
+        var deep = x.Color == PortalColor.Blue ? PP.BlueRamp[0] : PP.OrangeRamp[0];
+        float pulse = 1 + 0.04f * MathF.Sin(Time * 5 + (int)x.Color);
+        float ra = 25 * open * pulse, rb = 15 * open * pulse;           // canvas pixels
+        if (ra < 1) return;
+        float raW = ra / K.Px, rbW = rb / K.Px;
         var c = x.Center;
-        var p0 = c + x.Up * raW + x.Normal * 2;
-        var p1 = c - x.Up * raW + x.Normal * 2;
-        var p2 = c - x.Up * raW - x.Normal * rbW;
-        var p3 = c + x.Up * raW - x.Normal * rbW;
 
-        if (shaderOk)
+        Raylib.BeginBlendMode(BlendMode.Additive);
+        Raylib.DrawCircleGradient(c + x.Normal * 24, 90 * open, tint.WithAlpha(70), tint.WithAlpha(0));
+        Raylib.EndBlendMode();
+
+        float eyeU = Vector2.Dot(eye - c, x.Up) * K.Px;
+        float par = Math.Clamp(-eyeU * 0.12f, -16, 16);
+        var sc = Raylib.GetWorldToScreen2D(c, cam);
+        Raylib.SetShaderValue(windowShader, locCenter, sc, ShaderUniformDataType.Vec2);
+        Raylib.SetShaderValue(windowShader, locNrm, x.Normal, ShaderUniformDataType.Vec2);
+        Raylib.SetShaderValue(windowShader, locUp, x.Up, ShaderUniformDataType.Vec2);
+        Raylib.SetShaderValue(windowShader, locRa, ra, ShaderUniformDataType.Float);
+        Raylib.SetShaderValue(windowShader, locRb, rb, ShaderUniformDataType.Float);
+        Raylib.SetShaderValue(windowShader, locPar, par, ShaderUniformDataType.Float);
+        Raylib.SetShaderValue(windowShader, locTime, Time, ShaderUniformDataType.Float);
+        Raylib.SetShaderValue(windowShader, locOpen, Clamp01(x.Open), ShaderUniformDataType.Float);
+        Raylib.SetShaderValue(windowShader, locCanvas, new Vector2(K.CanvasW, K.CanvasH), ShaderUniformDataType.Vec2);
+        Raylib.SetShaderValue(windowShader, locTint, new Vector4(tint.R / 255f, tint.G / 255f, tint.B / 255f, 1), ShaderUniformDataType.Vec4);
+        Raylib.SetShaderValue(windowShader, locDeep, new Vector4(deep.R / 255f, deep.G / 255f, deep.B / 255f, 1), ShaderUniformDataType.Vec4);
+        Raylib.BeginShaderMode(windowShader);
+        Rlgl.SetTexture(tex.Id);
+        Rlgl.Begin((int)DrawMode.Quads);
+        var u = x.Up * (raW + 4); var n = x.Normal * (rbW + 4);
+        foreach (var v in new[] { c + u + n, c + u - n, c - u - n, c - u + n })
         {
-            var sc = Raylib.GetWorldToScreen2D(c, cam);
-            Raylib.SetShaderValue(windowShader, locCenter, sc, ShaderUniformDataType.Vec2);
-            Raylib.SetShaderValue(windowShader, locNrm, x.Normal, ShaderUniformDataType.Vec2);
-            Raylib.SetShaderValue(windowShader, locUp, x.Up, ShaderUniformDataType.Vec2);
-            Raylib.SetShaderValue(windowShader, locRa, ra, ShaderUniformDataType.Float);
-            Raylib.SetShaderValue(windowShader, locRb, rb, ShaderUniformDataType.Float);
-            Raylib.SetShaderValue(windowShader, locTime, Time, ShaderUniformDataType.Float);
-            Raylib.SetShaderValue(windowShader, locOpen, open, ShaderUniformDataType.Float);
-            Raylib.SetShaderValue(windowShader, locCanvas, new Vector2(K.CanvasW, K.CanvasH), ShaderUniformDataType.Vec2);
-            Raylib.SetShaderValue(windowShader, locTint, new Vector4(col.R / 255f, col.G / 255f, col.B / 255f, 1), ShaderUniformDataType.Vec4);
-            Raylib.BeginShaderMode(windowShader);
-            Rlgl.SetTexture(tex.Id);
-            Rlgl.Begin((int)DrawMode.Quads);
-            foreach (var v in new[] { p0, p3, p2, p1 })
-            {
-                var s = Raylib.GetWorldToScreen2D(v, cam);
-                Rlgl.Color4ub(255, 255, 255, 255);
-                Rlgl.TexCoord2f(s.X, s.Y);
-                Rlgl.Vertex2f(v.X, v.Y);
-            }
-            Rlgl.End();
-            Rlgl.SetTexture(0);
-            Raylib.EndShaderMode();
+            var s = Raylib.GetWorldToScreen2D(v, cam);
+            Rlgl.Color4ub(255, 255, 255, 255);
+            Rlgl.TexCoord2f(s.X, s.Y);
+            Rlgl.Vertex2f(v.X, v.Y);
         }
-        else
+        Rlgl.End();
+        Rlgl.SetTexture(0);
+        Raylib.EndShaderMode();
+
+        // sparkles drifting out of the lens
+        Raylib.BeginBlendMode(BlendMode.Additive);
+        for (int k = 0; k < 5; k++)
         {
-            // fallback without shaders: a plain rectangular window
-            Rlgl.SetTexture(tex.Id);
-            Rlgl.Begin((int)DrawMode.Quads);
-            foreach (var v in new[] { p0, p3, p2, p1 })
-            {
-                var s = Raylib.GetWorldToScreen2D(v, cam);
-                Rlgl.Color4ub(255, 255, 255, 255);
-                Rlgl.TexCoord2f(s.X / K.CanvasW, 1 - s.Y / K.CanvasH);
-                Rlgl.Vertex2f(v.X, v.Y);
-            }
-            Rlgl.End();
-            Rlgl.SetTexture(0);
+            float t = (Time * 0.7f + k * 0.2f) % 1f;
+            float side = Hash(k, (int)(Time * 0.7f + k * 0.2f), 3) * 2 - 1;
+            var pt = Snap(c + x.Up * side * raW * 0.8f + x.Normal * (rbW + t * 40));
+            Raylib.DrawRectangle((int)pt.X, (int)pt.Y, 2, 2, tint.WithAlpha(1 - t));
         }
+        Raylib.EndBlendMode();
+
+        // keep characters that are passing through visible on top of the lens (room side only)
+        float x0 = MathF.Min(MathF.Min((c + u).X, (c - u).X), c.X), y0 = MathF.Min(MathF.Min((c + u).Y, (c - u).Y), c.Y);
+        var a = Raylib.GetWorldToScreen2D(c + u, cam); var bb = Raylib.GetWorldToScreen2D(c - u + n, cam);
+        int sx = (int)MathF.Min(a.X, bb.X), sy = (int)MathF.Min(a.Y, bb.Y);
+        int sw = (int)MathF.Abs(a.X - bb.X) + 1, sh = (int)MathF.Abs(a.Y - bb.Y) + 1;
+        var lensRect = new Rectangle(MathF.Min((c + u + n).X, (c - u).X) - 2, MathF.Min((c + u + n).Y, (c - u).Y) - 2,
+            MathF.Abs((c + u + n).X - (c - u).X) + 4, MathF.Abs((c + u + n).Y - (c - u).Y) + 4);
+        bool any = (w.Player is { Dead: false } pl && MathX.Overlaps(pl.Rect, lensRect)) || w.Cubes.Any(cb => !cb.Gone && MathX.Overlaps(cb.Rect, lensRect));
+        if (!any) return;
+        Raylib.BeginScissorMode(sx, sy, sw, sh);
+        foreach (var cb in w.Cubes) DrawWithClones(w, cb, () => DrawCube(cb));
+        if (w.Player is { } p2) DrawWithClones(w, p2, () => DrawPlayer(p2));
+        Raylib.EndScissorMode();
     }
 
     public void DrawPortal(Portal p, bool linked)

@@ -15,6 +15,7 @@ public sealed class SaveData
     public int TotalDeaths { get; set; }
     public int RandomBestStreak { get; set; }
     public int RandomCleared { get; set; }
+    public bool CheckUpdates { get; set; } = true;
 
     static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Portal2D", "save.json");
