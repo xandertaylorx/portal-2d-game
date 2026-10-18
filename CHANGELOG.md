@@ -2,7 +2,7 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
-## [Unreleased]
+## [2.3.0] - 2026-10-18
 
 ### Added
 - **29 new chambers - 50 in total**, getting steadily harder: two-room chambers first, then three, four and five
