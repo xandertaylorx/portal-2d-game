@@ -5,7 +5,18 @@ namespace Portal2D.Game;
 public sealed class SaveData
 {
     public int Unlocked { get; set; } = 1;
+    /// <summary>Best times keyed by chamber name (stable when chambers are added or reordered).</summary>
+    public Dictionary<string, float> Times { get; set; } = new();
+    /// <summary>Legacy (v1/v2.0-2.1) index-based best times; migrated into <see cref="Times"/> on load.</summary>
     public float[] Best { get; set; } = [];
+    [System.Text.Json.Serialization.JsonIgnore] string[] names = [];
+
+    static readonly string[] Legacy18 =
+    [
+        "Awakening", "Blue Sky", "Two Ends", "Weighted", "Toxic", "Speedy Thing", "Emancipation", "Through the Glass",
+        "Relay", "Ascension", "Up and Over", "Spring Loaded", "Two Weights", "Gel Pit", "Umbrella", "Twin Beams",
+        "Grid Lock", "Final Exam"
+    ];
     public float Master { get; set; } = 0.8f;
     public float Sfx { get; set; } = 1f;
     public float Ambience { get; set; } = 0.5f;
@@ -20,7 +31,7 @@ public sealed class SaveData
     static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Portal2D", "save.json");
 
-    public static SaveData Load(int levelCount)
+    public static SaveData Load(string[] levelNames)
     {
         SaveData d;
         try
@@ -33,13 +44,18 @@ public sealed class SaveData
         {
             d = new SaveData();
         }
-        if (d.Best.Length != levelCount) d.Best = d.Best.Concat(new float[Math.Max(0, levelCount - d.Best.Length)]).Take(levelCount).ToArray();
-        d.Unlocked = Math.Clamp(d.Unlocked, 1, levelCount);
+        if (d.Times.Count == 0 && d.Best.Length == Legacy18.Length)
+            for (int i = 0; i < Legacy18.Length; i++)
+                if (d.Best[i] > 0) d.Times[Legacy18[i]] = d.Best[i];
+        d.names = levelNames;
+        d.Best = levelNames.Select(n => d.Times.TryGetValue(n, out var t) ? t : 0f).ToArray();
         return d;
     }
 
     public void Store()
     {
+        for (int i = 0; i < names.Length && i < Best.Length; i++)
+            if (Best[i] > 0) Times[names[i]] = Best[i];
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);

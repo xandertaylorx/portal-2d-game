@@ -11,7 +11,7 @@ public sealed class App
     enum Screen { Menu, Select, Options, Controls, Play, Complete, Ending }
 
     Screen screen = Screen.Menu;
-    readonly SaveData save = SaveData.Load(Levels.All.Length);
+    readonly SaveData save = SaveData.Load(Levels.All.Select(l => l.Name).ToArray());
     readonly Audio audio = new();
     readonly Updater updater = new();
     Renderer renderer = null!;
@@ -396,7 +396,6 @@ public sealed class App
             float best = save.Best[level];
             newBest = best <= 0 || levelTime < best;
             if (newBest) save.Best[level] = levelTime;
-            save.Unlocked = Math.Clamp(Math.Max(save.Unlocked, level + 2), 1, Levels.All.Length);
         }
         save.Store();
         SetScreen(Screen.Complete);
@@ -409,7 +408,17 @@ public sealed class App
         else StartLevel(level + 1);
     }
 
-    int ContinueLevel => Math.Min(save.Unlocked, Levels.All.Length) - 1;
+    /// <summary>The first chamber you haven't finished yet (or the last one).</summary>
+    int ContinueLevel
+    {
+        get
+        {
+            for (int i = 0; i < Levels.All.Length; i++) if (save.Best[i] <= 0) return i;
+            return Levels.All.Length - 1;
+        }
+    }
+
+    bool Unlocked(int i) => i == 0 || save.Best[i - 1] > 0 || save.Best[i] > 0;
 
     // ================================================================ draw
 
@@ -503,7 +512,7 @@ public sealed class App
 
         float y = 262, h = 60, gap = 10, bw = 440;
         int cont = ContinueLevel;
-        bool started = save.Unlocked > 1 || save.Best[0] > 0;
+        bool started = save.Best.Any(b => b > 0);
         string sub = $"CHAMBER {cont + 1:00} - {Levels.All[cont].Name}";
         if (UI.Button("play", new Rectangle(x, y, bw, h), started ? "CONTINUE" : "BEGIN TESTING", accent: PP.OrangeRamp[2], sub: sub)) StartLevel(cont);
         y += h + gap;
@@ -577,7 +586,7 @@ public sealed class App
         {
             int col = i % cols, row = i / cols;
             var r = new Rectangle(x0 + col * (cw + gx), y0 + row * (ch + gy), cw, ch);
-            bool locked = i >= save.Unlocked;
+            bool locked = !Unlocked(i);
             bool complete = save.Best[i] > 0;
             bool over = !locked && UI.Contains(r, UI.Mouse);
             if (stateT * 4 - i * 0.12f < 0) continue;

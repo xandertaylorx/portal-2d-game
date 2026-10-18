@@ -383,7 +383,59 @@ public static class Levels
             });
         }
 
-        // 18 - final exam: cube room, laser room with a grid, fling room
+        // 18 - beam fired upward through a ceiling portal
+        {
+            var b = LevelBuilder.Room();
+            b.Set(6, 20, '^');
+            b.Fill(4, 0, 9, 0, '#');
+            b.Fill(19, 8, 20, 15, 'X').Fill(20, 9, 20, 14, '#');
+            b.Set(39, 12, '4');
+            b.Fill(30, 1, 30, 15, '=').Fill(30, 16, 30, 19, 'a');
+            b.Set(12, 19, 'P').Set(37, 19, 'E');
+            list.Add(new LevelDef
+            {
+                Name = "Skylight", Map = b.Build(),
+                Hints = ["This beam points straight up.",
+                         "Catch it in the ceiling and send it sideways."]
+            });
+        }
+
+        // 19 - fling over goo, straight through an emancipation grid
+        {
+            var b = LevelBuilder.Room();
+            b.Fill(3, 5, 7, 5, 'X');
+            b.Fill(0, 1, 0, 4, '#').Fill(0, 7, 0, 14, '#');
+            b.Fill(1, 20, 12, 20, '#');
+            b.Fill(13, 20, 22, 21, '~');
+            b.Fill(18, 1, 18, 19, '|');
+            b.Set(5, 4, 'P').Set(37, 19, 'E');
+            list.Add(new LevelDef
+            {
+                Name = "Overpass", Map = b.Build(), Fling = true,
+                Hints = ["The gap is wider now. Fall further, fly further.",
+                         "Flying through the grid wipes your portals - after you've used them."]
+            });
+        }
+
+        // 20 - cube + gel: carry a cube up to a button on the ledge
+        {
+            var b = LevelBuilder.Room();
+            b.Fill(27, 7, 38, 19, 'X');
+            b.Fill(22, 20, 24, 20, 'J');
+            b.Fill(21, 0, 25, 0, '#');
+            b.Fill(0, 16, 0, 19, '#');
+            b.Set(30, 6, '1');
+            b.Fill(34, 1, 34, 2, 'X').Fill(34, 3, 34, 6, 'a');
+            b.Set(8, 19, 'C').Set(4, 19, 'P').Set(37, 6, 'E');
+            list.Add(new LevelDef
+            {
+                Name = "Bounce House", Map = b.Build(),
+                Hints = ["The button is up on the ledge. So is the exit.",
+                         "Cubes don't bounce while you hold them. You still do."]
+            });
+        }
+
+        // 21 - final exam: cube room, laser room with a grid, fling room
         {
             var b = LevelBuilder.Room(60, 26);
             // Room A

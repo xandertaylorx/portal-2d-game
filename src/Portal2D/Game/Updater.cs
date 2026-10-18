@@ -13,8 +13,8 @@ namespace Portal2D.Game;
 /// </summary>
 public sealed class Updater
 {
-    /// <summary>Public repository that hosts release builds.</summary>
-    public const string ReleaseRepo = "xandertaylorx/portal-2d-releases";
+    /// <summary>Repository whose GitHub releases host the builds.</summary>
+    public const string ReleaseRepo = "xandertaylorx/portal-2d-game";
 
     public enum State { Idle, Checking, UpToDate, Available, Downloading, Ready, Failed, Disabled }
 

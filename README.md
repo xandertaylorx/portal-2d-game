@@ -4,12 +4,12 @@
 
 <p align="center">
   <b>A pixel-art, side-scrolling portal puzzler, written from scratch in C#.</b><br>
-  18 handcrafted test chambers, an endless procedurally generated mode,
+  21 handcrafted test chambers, an endless procedurally generated mode,
   and portals you can actually see through.
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.1.0-ff8a1f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-2.2.0-ff8a1f?style=flat-square">
   <img alt=".NET" src="https://img.shields.io/badge/.NET-10-3fa7ff?style=flat-square">
   <img alt="platforms" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-5ee08a?style=flat-square">
   <img alt="license" src="https://img.shields.io/badge/license-PolyForm%20Strict-d97757?style=flat-square">
@@ -30,7 +30,7 @@
 
 ## Features
 
-- **18 handcrafted chambers** that teach and then combine: momentum flings, weighted cubes and buttons, toxic goo,
+- **21 handcrafted chambers** that teach and then combine: momentum flings, weighted cubes and buttons, toxic goo,
   emancipation grids, lasers and receivers, glass, and blue repulsion gel.
 - **Random Test mode**: endless chambers assembled from randomised puzzle rooms. Each run gets harder, and the game
   tracks your best streak.
@@ -51,7 +51,7 @@
 
 ## Download & play
 
-Grab the latest build from the **[Releases page](https://github.com/xandertaylorx/portal-2d-releases/releases/latest)**:
+Grab the latest build from the **[Releases page](https://github.com/xandertaylorx/portal-2d-game/releases/latest)**:
 
 | Platform | File |
 |---|---|
@@ -130,7 +130,7 @@ dotnet run --project src/Portal2D -- --preview 9 l9.png   # render a level to PN
 2. Run `./scripts/release.sh x.y.z`.
 
 The script runs the tests, stamps the version, builds macOS, Windows and Linux packages, tags the source, and
-publishes a GitHub release on the public releases repo. Running games pick it up and offer the update.
+publishes a GitHub release on this repo. Running games pick it up and offer the update.
 
 ### Project layout
 

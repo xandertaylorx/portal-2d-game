@@ -7,10 +7,10 @@
 # 2. stamps the version into the project, builds self-contained packages for
 #    macOS (arm64 + x64), Windows (x64) and Linux (x64)
 # 3. commits + tags the source repo, then creates a GitHub release with the
-#    builds on the public releases repo - running games see it and offer to update.
+#    builds on this repo - running games see it and offer to update.
 set -e
 VERSION=${1:?usage: release.sh <version>}
-RELEASE_REPO=${RELEASE_REPO:-xandertaylorx/portal-2d-releases}
+RELEASE_REPO=${RELEASE_REPO:-xandertaylorx/portal-2d-game}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PROJ="$ROOT/src/Portal2D/Portal2D.csproj"
 OUT="$ROOT/dist/release-$VERSION"

@@ -2,6 +2,20 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.2.0] - 2026-10-18
+
+### Added
+- Three new chambers before the Final Exam (21 in total):
+  - **Skylight**: catch an upward beam in the ceiling and send it sideways into a receiver.
+  - **Overpass**: a longer fling over goo, straight through an emancipation grid.
+  - **Bounce House**: carry a cube through a ceiling drop onto gel and up to a button on the ledge.
+
+### Changed
+- Updates now come straight from the main repository's releases.
+- Best times are stored by chamber name, so adding chambers no longer mixes up your records. Older saves are
+  migrated automatically.
+- A chamber unlocks as soon as you finish the one before it.
+
 ## [2.1.0] - 2026-10-18
 
 ### Added
