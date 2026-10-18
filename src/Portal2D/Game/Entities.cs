@@ -34,7 +34,7 @@ public sealed class Player : Body
     public Player(Vector2 pos)
     {
         Pos = pos;
-        Half = new Vector2(11, 22);
+        Half = new Vector2(11, 15);
     }
 }
 

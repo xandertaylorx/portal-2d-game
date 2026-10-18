@@ -8,9 +8,10 @@ public static class K
     public const int Tile = 32;
     public const int ScreenW = 1280;
     public const int ScreenH = 720;
-    public const int SS = 2; // supersampling factor for the off-screen canvas
-    public const int CanvasW = ScreenW * SS;
-    public const int CanvasH = ScreenH * SS;
+    /// <summary>Canvas pixels per virtual unit. The game renders to a 640x360 pixel-art canvas.</summary>
+    public const float Px = 0.5f;
+    public const int CanvasW = 640;
+    public const int CanvasH = 360;
     public const float SimDt = 1f / 120f;
 }
 

@@ -10,6 +10,7 @@ public enum GunMode { None, BlueOnly, Both }
 ///   '~' toxic goo       '|' emancipation grid          'P' player start         'E' exit
 ///   'C' cube spawn      '1','2','3' floor buttons      '4','5','6' laser receivers
 ///   'a','b','c' doors (opened by group 1/2/3)          '>','<','^','v' laser emitters
+///   'J' blue repulsion gel (bounce pad)
 ///   'u' / 'o' fixed blue / orange portal marker (portal sits on the wall in BlueDir / OrangeDir)
 /// </summary>
 public sealed class LevelDef
@@ -21,6 +22,8 @@ public sealed class LevelDef
     public Int2 OrangeDir;
     public string[] Hints = [];
     public bool Fling;
+    /// <summary>Painted on the back wall (chamber number).</summary>
+    public string Label = "";
 }
 
 public sealed class LevelBuilder
@@ -279,7 +282,108 @@ public static class Levels
             });
         }
 
-        // 12 - final exam: cube room, laser room with a grid, fling room
+        // 12 - repulsion gel
+        {
+            var b = LevelBuilder.Room();
+            b.Fill(27, 7, 38, 19, 'X');
+            b.Fill(22, 20, 24, 20, 'J');
+            b.Fill(21, 0, 25, 0, '#');
+            b.Fill(0, 16, 0, 19, '#');
+            b.Set(4, 19, 'P').Set(36, 6, 'E');
+            list.Add(new LevelDef
+            {
+                Name = "Spring Loaded", Map = b.Build(),
+                Hints = ["Blue gel bounces you. The harder you land, the higher you go.",
+                         "Fall from far enough and the gel will throw you onto the ledge."]
+            });
+        }
+
+        // 13 - two buttons, two cubes
+        {
+            var b = LevelBuilder.Room();
+            b.Fill(30, 9, 36, 9, 'X').Set(33, 8, 'C');
+            b.Fill(30, 0, 35, 0, '#');
+            b.Fill(14, 20, 20, 20, '#');
+            b.Fill(37, 1, 37, 15, 'X').Fill(37, 16, 37, 19, 'a');
+            b.Set(12, 19, '1').Set(26, 19, '1');
+            b.Set(6, 19, 'C').Set(3, 19, 'P').Set(38, 19, 'E');
+            list.Add(new LevelDef
+            {
+                Name = "Two Weights", Map = b.Build(),
+                Hints = ["The door needs BOTH buttons held down.",
+                         "One cube is easy. The other one is up on the shelf."]
+            });
+        }
+
+        // 14 - gel island over goo
+        {
+            var b = LevelBuilder.Room();
+            b.Fill(9, 20, 12, 21, '~').Fill(13, 20, 15, 20, 'J').Fill(16, 20, 20, 21, '~');
+            b.Fill(30, 8, 38, 19, 'X');
+            b.Fill(31, 0, 36, 0, '#');
+            b.Fill(22, 20, 28, 20, '#');
+            b.Set(3, 19, 'P').Set(36, 7, 'E');
+            list.Add(new LevelDef
+            {
+                Name = "Gel Pit", Map = b.Build(),
+                Hints = ["You can't stand on gel - but you can use it to get across.",
+                         "Keep moving while you bounce."]
+            });
+        }
+
+        // 15 - cube as a laser shield
+        {
+            var b = LevelBuilder.Room();
+            b.Fill(1, 9, 6, 9, 'X').Set(3, 8, 'C');
+            b.Fill(1, 0, 6, 0, '#');
+            b.Fill(8, 20, 12, 20, '#');
+            b.Set(15, 0, 'v').Set(24, 0, 'v');
+            b.Set(31, 19, '1');
+            b.Fill(35, 1, 35, 15, 'X').Fill(35, 16, 35, 19, 'a');
+            b.Set(11, 19, 'P').Set(37, 19, 'E');
+            list.Add(new LevelDef
+            {
+                Name = "Umbrella", Map = b.Build(),
+                Hints = ["Lasers can't get through cubes.",
+                         "Hold the cube above your head and walk under the beams."]
+            });
+        }
+
+        // 16 - two beams through one portal pair
+        {
+            var b = LevelBuilder.Room();
+            b.Set(0, 9, '>').Set(0, 10, '>');
+            b.Fill(20, 2, 21, 15, 'X').Fill(20, 6, 20, 13, '#').Fill(21, 2, 21, 7, '#');
+            b.Set(39, 3, '4').Set(39, 4, '4');
+            b.Fill(30, 1, 30, 15, '=').Fill(30, 16, 30, 19, 'a');
+            b.Set(4, 19, 'P').Set(37, 19, 'E');
+            list.Add(new LevelDef
+            {
+                Name = "Twin Beams", Map = b.Build(),
+                Hints = ["Both receivers must be lit.",
+                         "One portal pair can carry two beams at once - if you line it up."]
+            });
+        }
+
+        // 17 - grid, cube transport and a shielded crossing
+        {
+            var b = LevelBuilder.Room();
+            b.Fill(12, 1, 12, 19, '|');
+            b.Fill(7, 20, 10, 20, '#');
+            b.Fill(15, 0, 19, 0, '#');
+            b.Set(24, 0, 'v');
+            b.Set(30, 19, '1');
+            b.Fill(34, 1, 34, 15, 'X').Fill(34, 16, 34, 19, 'a');
+            b.Set(6, 19, 'C').Set(3, 19, 'P').Set(37, 19, 'E');
+            list.Add(new LevelDef
+            {
+                Name = "Grid Lock", Map = b.Build(),
+                Hints = ["The grid eats cubes. The beam eats you.",
+                         "Get the cube across both - in one piece."]
+            });
+        }
+
+        // 18 - final exam: cube room, laser room with a grid, fling room
         {
             var b = LevelBuilder.Room(60, 26);
             // Room A
@@ -307,6 +411,7 @@ public static class Levels
             });
         }
 
+        for (int i = 0; i < list.Count; i++) list[i].Label = $"{i + 1:00}";
         return list.ToArray();
     }
 }

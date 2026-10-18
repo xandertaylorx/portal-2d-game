@@ -39,6 +39,7 @@ public sealed class World
     public const float JumpVel = 640f;
     public const float MaxWalk = 250f;
     public const float MaxFall = 1500f;
+    public const float GelBounce = 1000f;
     const int T = K.Tile;
 
     public readonly LevelDef Def;
@@ -80,7 +81,7 @@ public sealed class World
             var standPos = new Vector2(x * T + T / 2f, (y + 1) * T);
             switch (c)
             {
-                case 'P': Player = new Player(standPos - new Vector2(0, 22)); c = ' '; break;
+                case 'P': Player = new Player(standPos - new Vector2(0, 15)); c = ' '; break;
                 case 'C': Cubes.Add(new Cube(standPos - new Vector2(0, 14))); c = ' '; break;
                 case 'E': Exit = new Int2(x, y); HasExit = true; c = ' '; break;
                 case '1' or '2' or '3': Buttons.Add(new FloorButton { X = x, Y = y, Group = c - '1' }); c = ' '; break;
@@ -123,7 +124,7 @@ public sealed class World
         char c = At(x, y);
         return c switch
         {
-            '#' or 'X' or '=' or '<' or '>' or '^' or 'v' or '4' or '5' or '6' => true,
+            '#' or 'X' or '=' or '<' or '>' or '^' or 'v' or '4' or '5' or '6' or 'J' => true,
             'a' or 'b' or 'c' => DoorOpen[c - 'a'] < 0.98f,
             _ => false
         };
@@ -227,7 +228,7 @@ public sealed class World
         }
     }
 
-    public static Vector2 GunOrigin(Player p) => p.Pos + new Vector2(0, -6);
+    public static Vector2 GunOrigin(Player p) => p.Pos + new Vector2(0, -2);
 
     public Portal? PortalOnFace(Int2 tile, Vector2 normal)
     {
@@ -412,8 +413,8 @@ public sealed class World
             if (p == null || p.Dead) { c.Held = false; if (p != null) p.Holding = null; return; }
             var target = p.Pos + new Vector2(0, -2) + p.Aim * 36f;
             var to = target - c.Pos;
-            c.Vel = to * 22f;
-            if (c.Vel.Length() > 1400) c.Vel = Vector2.Normalize(c.Vel) * 1400;
+            c.Vel = to * 60f;
+            if (c.Vel.Length() > 2400) c.Vel = Vector2.Normalize(c.Vel) * 2400;
             MoveBody(c, dt, false);
             if (Vector2.Distance(c.Pos, target) > 90) DropCube(p, false);
             return;
@@ -513,7 +514,23 @@ public sealed class World
         {
             for (int y = y0; y <= y1; y++)
                 for (int x = x0; x <= x1; x++)
-                    if (SolidFor(b, x, y)) { b.Pos.Y = y * T - b.Half.Y - 0.01f; if (b.Vel.Y > 0) b.Vel.Y = 0; b.OnGround = true; goto boxes; }
+                    if (SolidFor(b, x, y))
+                    {
+                        b.Pos.Y = y * T - b.Half.Y - 0.01f;
+                        if (At(x, y) == 'J' && b is not Cube { Held: true })
+                        {
+                            // repulsion gel: bounce back up, keeping (most of) the impact speed
+                            float speed = MathF.Max(b.Vel.Y * 0.95f, GelBounce);
+                            b.Vel.Y = -speed;
+                            if (b is Player pl) pl.JumpCut = true;
+                            Fx.Burst(new Vector2(b.Pos.X, y * T), Palette.Blue, 10, 160, 0.4f, 2.5f, 300, PKind.Dot, true, new Vector2(0, -1), 0.9f);
+                            Emit(Sfx.Jump, b.Pos);
+                            goto boxes;
+                        }
+                        if (b.Vel.Y > 0) b.Vel.Y = 0;
+                        b.OnGround = true;
+                        goto boxes;
+                    }
         }
         else
         {

@@ -63,6 +63,14 @@ public sealed class Bot
     /// <summary>Swing the held cube toward a point, let it settle, then let go.</summary>
     public IEnumerable<InputState> Drop(Vector2 toward) => Seq(AimAt(toward), Wait(0.35f), Use());
 
+    /// <summary>Jump while holding a direction, then keep holding it until landing past x.</summary>
+    public IEnumerable<InputState> JumpTo(int dir, Func<bool> landed, float timeout = 6)
+    {
+        yield return In(dir, jump: true);
+        float t = 0;
+        while (!landed() && t < timeout && !P.Dead) { yield return In(dir); t += Frame; }
+    }
+
     public IEnumerable<InputState> Use()
     {
         yield return In(use: true);
@@ -70,12 +78,13 @@ public sealed class Bot
     }
 
     /// <summary>Walk to an x position, auto-jumping obstacles (and optionally cubes in the way).</summary>
-    public IEnumerable<InputState> WalkTo(float x, bool hopCubes = false, Func<bool>? stopIf = null, float timeout = 12)
+    public IEnumerable<InputState> WalkTo(float x, bool hopCubes = false, Func<bool>? stopIf = null, float timeout = 12, Vector2? aimRel = null)
     {
         float t = 0;
         int stuck = 0;
-        while (MathF.Abs(P.Pos.X - x) > 3 && t < timeout && !P.Dead && !P.Won && !(stopIf?.Invoke() ?? false))
+        while ((MathF.Abs(P.Pos.X - x) > 3 || !P.OnGround) && t < timeout && !P.Dead && !P.Won && !(stopIf?.Invoke() ?? false))
         {
+            if (aimRel is { } ar) Aim = P.Pos + ar;
             float dx = x - P.Pos.X;
             int dir = Math.Sign(dx);
             float v = MathF.Abs(P.Vel.X);

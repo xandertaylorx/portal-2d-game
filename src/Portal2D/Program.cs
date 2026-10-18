@@ -17,6 +17,51 @@ public static class Program
             }
             return 0;
         }
+        if (args.Contains("--proctrace"))
+        {
+            Procgen.Force = Enum.Parse<Procgen.Room>(args[Array.IndexOf(args, "--proctrace") + 1]);
+            var r = Procgen.Generate(1, 2);
+            foreach (var row in r.Def.Map) Console.WriteLine(row);
+            var w = new World(r.Def); var bot = new Testing.Bot(w);
+            using var e = r.Solution(bot).GetEnumerator();
+            for (int f = 0; f < 60 * 40; f++)
+            {
+                Testing.TestRunner.StepFrame(w, e.MoveNext() ? e.Current : bot.In());
+                var pl = w.Player!;
+                if (f % 15 == 0) Console.WriteLine($"t={f / 60f:0.00} p=({pl.Pos.X / 32:0.0},{pl.Pos.Y / 32:0.0}) v=({pl.Vel.X:0},{pl.Vel.Y:0}) g={pl.OnGround}");
+                if (pl.Dead || pl.Won) { Console.WriteLine(pl.Dead ? "DEAD" : "WON"); break; }
+            }
+            return 0;
+        }
+        if (args.Contains("--procdiag")) { Console.Write(Procgen.Diagnose(20)); return 0; }
+        int pg = Array.IndexOf(args, "--procgen");
+        if (pg >= 0)
+        {
+            int count = int.Parse(args[pg + 1]);
+            int ok = 0, totalAttempts = 0;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int seed = 1; seed <= count; seed++)
+            {
+                var r = Procgen.Generate(seed, seed % 7);
+                bool good = Procgen.Verify(r);
+                if (good) ok++;
+                totalAttempts += r.Attempts;
+                if (args.Contains("-v") || !good) Console.WriteLine($"seed {seed}: {(good ? "ok" : "FAILED")} attempts={r.Attempts} width={r.Def.Map[0].Length}");
+            }
+            Console.WriteLine($"{ok}/{count} generated levels verified, avg attempts {totalAttempts / (float)count:0.0}, {sw.ElapsedMilliseconds / (float)count:0} ms each");
+            return ok == count ? 0 : 1;
+        }
+        int pv = Array.IndexOf(args, "--preview");
+        if (pv >= 0)
+        {
+            var def = args[pv + 1] == "menu" ? Levels.Menu
+                : args[pv + 1].StartsWith("r") ? Procgen.Generate(int.Parse(args[pv + 1][1..]), 6).Def
+                : Levels.All[int.Parse(args[pv + 1]) - 1];
+            Render.Preview.Level(new World(def), 0.5f).Export(args[pv + 2], 2);
+            return 0;
+        }
+        int sp = Array.IndexOf(args, "--sprites");
+        if (sp >= 0) { Render.Preview.SpriteSheet().Export(args[sp + 1], 4); return 0; }
         new App(args).Run();
         return 0;
     }

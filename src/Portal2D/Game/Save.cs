@@ -13,6 +13,8 @@ public sealed class SaveData
     public bool Shake { get; set; } = true;
     public bool Fullscreen { get; set; }
     public int TotalDeaths { get; set; }
+    public int RandomBestStreak { get; set; }
+    public int RandomCleared { get; set; }
 
     static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Portal2D", "save.json");
