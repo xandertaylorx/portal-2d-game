@@ -64,6 +64,8 @@ public static class Program
         if (bn >= 0) { Render.Preview.Banner().Export(args[bn + 1], 2); return 0; }
         int sp = Array.IndexOf(args, "--sprites");
         if (sp >= 0) { Render.Preview.SpriteSheet().Export(args[sp + 1], 4); return 0; }
+        int rt = Array.IndexOf(args, "--resolve-app");
+        if (rt >= 0) { Console.WriteLine(Updater.OriginalBundlePath(args[rt + 1]) ?? "(unresolved)"); return 0; }
         int su = Array.IndexOf(args, "--selftest-update");
         if (su >= 0)
         {

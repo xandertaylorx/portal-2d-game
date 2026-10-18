@@ -48,6 +48,56 @@ public sealed class Updater
 
     static string InstallDir => AppContext.BaseDirectory;
 
+    // --- macOS App Translocation -------------------------------------------------------------
+    // A quarantined app opened from Downloads runs from a hidden read-only copy under
+    // /private/var/folders/.../AppTranslocation/. Updating that copy does nothing, so ask macOS for
+    // the app's real location and update that instead.
+    const string CF = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
+    const string Sec = "/System/Library/Frameworks/Security.framework/Security";
+    [DllImport(CF)] static extern IntPtr CFURLCreateFromFileSystemRepresentation(IntPtr alloc, byte[] buffer, long length, [MarshalAs(UnmanagedType.U1)] bool isDirectory);
+    [DllImport(CF)] [return: MarshalAs(UnmanagedType.U1)] static extern bool CFURLGetFileSystemRepresentation(IntPtr url, [MarshalAs(UnmanagedType.U1)] bool resolveAgainstBase, byte[] buffer, long maxLength);
+    [DllImport(CF)] static extern void CFRelease(IntPtr cf);
+    [DllImport(Sec)] static extern IntPtr SecTranslocateCreateOriginalPathForURL(IntPtr translocatedPath, IntPtr error);
+
+    public static bool IsTranslocated(string path) => path.Contains("/AppTranslocation/", StringComparison.Ordinal);
+
+    /// <summary>Real on-disk path of a translocated app bundle, or null if it can't be determined.</summary>
+    public static string? OriginalBundlePath(string bundle)
+    {
+        if (!OperatingSystem.IsMacOS() || !IsTranslocated(bundle)) return bundle;
+        try
+        {
+            var bytes = System.Text.Encoding.UTF8.GetBytes(bundle);
+            IntPtr url = CFURLCreateFromFileSystemRepresentation(IntPtr.Zero, bytes, bytes.Length, true);
+            if (url == IntPtr.Zero) return null;
+            IntPtr orig = SecTranslocateCreateOriginalPathForURL(url, IntPtr.Zero);
+            CFRelease(url);
+            if (orig == IntPtr.Zero) return null;
+            var buf = new byte[4096];
+            bool ok = CFURLGetFileSystemRepresentation(orig, true, buf, buf.Length);
+            CFRelease(orig);
+            if (!ok) return null;
+            string path = System.Text.Encoding.UTF8.GetString(buf, 0, Array.IndexOf(buf, (byte)0)).TrimEnd('/');
+            return Directory.Exists(path) && !IsTranslocated(path) ? path : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    static bool CanWrite(string dir)
+    {
+        try
+        {
+            string probe = Path.Combine(dir, $".portal2d-write-test-{Environment.ProcessId}");
+            File.WriteAllText(probe, "");
+            File.Delete(probe);
+            return true;
+        }
+        catch { return false; }
+    }
+
     /// <summary>Running from a development build (dotnet run / bin folder): don't self-update.</summary>
     public static bool IsDevBuild
     {
@@ -189,16 +239,36 @@ public sealed class Updater
                 string? bundle = null;
                 int idx = dest.IndexOf(".app/Contents/MacOS", StringComparison.Ordinal);
                 if (idx > 0) bundle = dest[..(idx + 4)];
-                // re-sign the bundle after swapping files so its signature stays valid
-                string resign = bundle != null ? $"codesign --force --deep -s - \"{bundle}\" >/dev/null 2>&1\n" : "";
-                string relaunch = resign + (bundle != null ? $"open \"{bundle}\"" : $"\"{Path.Combine(dest, ExeName)}\" >/dev/null 2>&1 &");
+                if (bundle != null && IsTranslocated(bundle))
+                {
+                    var real = OriginalBundlePath(bundle);
+                    if (real == null)
+                    {
+                        Error = "Move Portal 2D to your Applications folder, open it from there, then update";
+                        Status = State.Failed;
+                        return false;
+                    }
+                    bundle = real;
+                    dest = Path.Combine(real, "Contents", "MacOS");
+                }
+                if (!CanWrite(dest))
+                {
+                    Error = "Can't write to the game folder - move Portal 2D somewhere you own (e.g. Applications)";
+                    Status = State.Failed;
+                    return false;
+                }
+                // after swapping files: drop the download quarantine flag (otherwise macOS keeps running a
+                // read-only translocated copy and every update needs re-approval), then re-sign the bundle
+                string finish = bundle != null
+                    ? $"xattr -dr com.apple.quarantine \"{bundle}\" >/dev/null 2>&1\ncodesign --force --deep -s - \"{bundle}\" >/dev/null 2>&1\nopen \"{bundle}\"\n"
+                    : $"\"{Path.Combine(dest, ExeName)}\" >/dev/null 2>&1 &\n";
                 string script = Path.Combine(Path.GetTempPath(), "portal2d-update.sh");
                 File.WriteAllText(script,
                     "#!/bin/sh\n" +
                     $"while kill -0 {pid} 2>/dev/null; do sleep 0.2; done\n" +
                     $"cp -R \"{stagedDir}/.\" \"{dest}/\"\n" +
                     $"chmod +x \"{Path.Combine(dest, ExeName)}\"\n" +
-                    relaunch + "\n");
+                    finish);
                 Process.Start(new ProcessStartInfo("/bin/sh", $"\"{script}\"") { UseShellExecute = false });
             }
             return true;

@@ -2,6 +2,15 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+- macOS: updating did nothing when the game was opened straight from Downloads. macOS secretly ran it from a hidden
+  read-only copy, so the updater changed that copy instead of the real app. The updater now finds the real app,
+  updates it, clears the download quarantine flag so it isn't run from a hidden copy again, and re-signs it.
+- If the game folder can't be written to, the update banner now says why (for example, "move Portal 2D to
+  Applications") instead of silently restarting the old version.
+
 ## [2.2.1] - 2026-10-18
 
 ### Fixed
