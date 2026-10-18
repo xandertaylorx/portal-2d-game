@@ -50,6 +50,9 @@ for ARCH in arm64 x64; do
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
+  # ad-hoc sign the whole bundle: an unsigned bundle shows up as "damaged" on Apple Silicon once downloaded
+  codesign --force --deep -s - "$APP"
+  codesign --verify --deep --strict "$APP"
   (cd "$OUT/mac-$ARCH" && ditto -c -k --keepParent "Portal 2D.app" "$OUT/Portal2D-macOS-$ARCH-app.zip")
 done
 

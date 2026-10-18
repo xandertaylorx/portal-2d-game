@@ -60,7 +60,9 @@ Grab the latest build from the **[Releases page](https://github.com/xandertaylor
 | Windows | `Portal2D-win-x64.zip` (run `Portal2D.exe`) |
 | Linux | `Portal2D-linux-x64.zip` (run `./Portal2D`) |
 
-> **macOS:** the app isn't notarised, so the first time you open it, right-click it and choose **Open**.
+> **macOS:** the app is signed but not notarised by Apple. The first time you open it, macOS warns that it can't
+> verify the developer. Click **Done**, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
+> Or run `xattr -cr "/Applications/Portal 2D.app"` once, using wherever you put the app.
 
 After that, the game checks for updates when it starts. You can turn this off in Options.
 

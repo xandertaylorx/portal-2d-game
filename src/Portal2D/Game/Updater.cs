@@ -189,7 +189,9 @@ public sealed class Updater
                 string? bundle = null;
                 int idx = dest.IndexOf(".app/Contents/MacOS", StringComparison.Ordinal);
                 if (idx > 0) bundle = dest[..(idx + 4)];
-                string relaunch = bundle != null ? $"open \"{bundle}\"" : $"\"{Path.Combine(dest, ExeName)}\" >/dev/null 2>&1 &";
+                // re-sign the bundle after swapping files so its signature stays valid
+                string resign = bundle != null ? $"codesign --force --deep -s - \"{bundle}\" >/dev/null 2>&1\n" : "";
+                string relaunch = resign + (bundle != null ? $"open \"{bundle}\"" : $"\"{Path.Combine(dest, ExeName)}\" >/dev/null 2>&1 &");
                 string script = Path.Combine(Path.GetTempPath(), "portal2d-update.sh");
                 File.WriteAllText(script,
                     "#!/bin/sh\n" +
