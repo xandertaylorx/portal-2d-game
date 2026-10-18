@@ -260,7 +260,8 @@ public sealed class Updater
                 // after swapping files: drop the download quarantine flag (otherwise macOS keeps running a
                 // read-only translocated copy and every update needs re-approval), then re-sign the bundle
                 string finish = bundle != null
-                    ? $"xattr -dr com.apple.quarantine \"{bundle}\" >/dev/null 2>&1\ncodesign --force --deep -s - \"{bundle}\" >/dev/null 2>&1\nopen \"{bundle}\"\n"
+                    ? $"/usr/libexec/PlistBuddy -c \"Set :CFBundleShortVersionString {LatestVersion}\" \"{bundle}/Contents/Info.plist\" >/dev/null 2>&1\n" +
+                      $"xattr -dr com.apple.quarantine \"{bundle}\" >/dev/null 2>&1\ncodesign --force --deep -s - \"{bundle}\" >/dev/null 2>&1\nopen \"{bundle}\"\n"
                     : $"\"{Path.Combine(dest, ExeName)}\" >/dev/null 2>&1 &\n";
                 string script = Path.Combine(Path.GetTempPath(), "portal2d-update.sh");
                 File.WriteAllText(script,

@@ -2,6 +2,11 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+- macOS: after an in-game update, Finder's "Get Info" now shows the new version number.
+
 ## [2.2.2] - 2026-10-18
 
 ### Fixed
