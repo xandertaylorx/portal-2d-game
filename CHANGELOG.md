@@ -2,7 +2,7 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
-## [Unreleased]
+## [2.2.1] - 2026-10-18
 
 ### Fixed
 - macOS downloads no longer show "Portal 2D is damaged and can't be opened": the app bundle is now signed as a whole,
