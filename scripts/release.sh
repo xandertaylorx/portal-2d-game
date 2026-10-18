@@ -57,7 +57,7 @@ done
 awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > "$OUT/notes.md"
 
 echo "== tag + push"
-git commit -qam "Release v$VERSION"
+git diff --quiet || git commit -qam "Release v$VERSION"
 git tag "v$VERSION"
 git push -q && git push -q --tags
 
