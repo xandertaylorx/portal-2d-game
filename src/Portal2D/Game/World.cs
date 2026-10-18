@@ -51,8 +51,9 @@ public sealed class World
     public readonly List<Emitter> Emitters = new();
     public readonly List<Receiver> Receivers = new();
     public readonly Portal?[] Portals = new Portal?[2];
-    public readonly float[] DoorOpen = new float[3];
-    public readonly bool[] GroupActive = new bool[3];
+    public const int Groups = 6;
+    public readonly float[] DoorOpen = new float[Groups];
+    public readonly bool[] GroupActive = new bool[Groups];
     public readonly List<LaserSeg> Lasers = new();
     public readonly List<Vector2> LaserImpacts = new();
     public readonly List<GameEvent> Events = new();
@@ -84,8 +85,8 @@ public sealed class World
                 case 'P': Player = new Player(standPos - new Vector2(0, 15)); c = ' '; break;
                 case 'C': Cubes.Add(new Cube(standPos - new Vector2(0, 14))); c = ' '; break;
                 case 'E': Exit = new Int2(x, y); HasExit = true; c = ' '; break;
-                case '1' or '2' or '3': Buttons.Add(new FloorButton { X = x, Y = y, Group = c - '1' }); c = ' '; break;
-                case '4' or '5' or '6': Receivers.Add(new Receiver { X = x, Y = y, Group = c - '4' }); break;
+                case var bc when ButtonGroup(bc) >= 0: Buttons.Add(new FloorButton { X = x, Y = y, Group = ButtonGroup(bc) }); c = ' '; break;
+                case var rc when ReceiverGroup(rc) >= 0: Receivers.Add(new Receiver { X = x, Y = y, Group = ReceiverGroup(rc) }); break;
                 case '>': Emitters.Add(new Emitter { X = x, Y = y, Dir = new Vector2(1, 0) }); break;
                 case '<': Emitters.Add(new Emitter { X = x, Y = y, Dir = new Vector2(-1, 0) }); break;
                 case '^': Emitters.Add(new Emitter { X = x, Y = y, Dir = new Vector2(0, -1) }); break;
@@ -117,15 +118,23 @@ public sealed class World
 
     public char At(int x, int y) => x < 0 || y < 0 || x >= W || y >= H ? 'X' : Tiles[x, y];
 
-    public static bool IsDoor(char c) => c is 'a' or 'b' or 'c';
+    // circuit groups 0-5: doors a-f, buttons 1 2 3 x y z, laser receivers 4 5 6 r s t
+    public static bool IsDoor(char c) => c is >= 'a' and <= 'f';
+    public static int ButtonGroup(char c) => c switch { '1' => 0, '2' => 1, '3' => 2, 'x' => 3, 'y' => 4, 'z' => 5, _ => -1 };
+    public static int ReceiverGroup(char c) => c switch { '4' => 0, '5' => 1, '6' => 2, 'r' => 3, 's' => 4, 't' => 5, _ => -1 };
+    public static bool IsReceiver(char c) => ReceiverGroup(c) >= 0;
+    public static char DoorChar(int g) => (char)('a' + g);
+    public static char ButtonChar(int g) => "123xyz"[g];
+    public static char ReceiverChar(int g) => "456rst"[g];
 
     public bool IsSolid(int x, int y)
     {
         char c = At(x, y);
         return c switch
         {
-            '#' or 'X' or '=' or '<' or '>' or '^' or 'v' or '4' or '5' or '6' or 'J' => true,
-            'a' or 'b' or 'c' => DoorOpen[c - 'a'] < 0.98f,
+            '#' or 'X' or '=' or '<' or '>' or '^' or 'v' or 'J' => true,
+            >= 'a' and <= 'f' => DoorOpen[c - 'a'] < 0.98f,
+            _ when IsReceiver(c) => true,
             _ => false
         };
     }
@@ -691,7 +700,7 @@ public sealed class World
             r.Glow = MathX.Approach(r.Glow, r.Active ? 1 : 0, dt * 4);
         }
 
-        for (int g = 0; g < 3; g++)
+        for (int g = 0; g < Groups; g++)
         {
             int total = 0, on = 0;
             foreach (var b in Buttons) if (b.Group == g) { total++; if (b.Pressed) on++; }

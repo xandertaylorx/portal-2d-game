@@ -25,7 +25,7 @@ public sealed class LevelArt
                 PaintTile(w, tx, ty);
     }
 
-    static bool StaticSolid(char c) => c is '#' or 'X' or '<' or '>' or '^' or 'v' or '4' or '5' or '6' or 'J';
+    static bool StaticSolid(char c) => c is '#' or 'X' or '<' or '>' or '^' or 'v' or 'J' || World.IsReceiver(c);
     static bool Mass(World w, int x, int y) => x < 0 || y < 0 || x >= w.W || y >= h(w) || StaticSolid(w.At(x, y));
     static int h(World w) => w.H;
 
@@ -164,7 +164,7 @@ public sealed class LevelArt
             case 'X': Metal(w, tx, ty); break;
             case '=': Glass(w, tx, ty); break;
             case '<' or '>' or '^' or 'v': Metal(w, tx, ty); Emitter(tx, ty, c); break;
-            case '4' or '5' or '6': Metal(w, tx, ty); Receiver(tx, ty); break;
+            case var rc when World.IsReceiver(rc): Metal(w, tx, ty); Receiver(tx, ty); break;
             case 'J': Metal(w, tx, ty); Gel(w, tx, ty); break;
         }
     }

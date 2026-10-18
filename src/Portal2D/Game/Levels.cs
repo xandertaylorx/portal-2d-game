@@ -24,6 +24,8 @@ public sealed class LevelDef
     public bool Fling;
     /// <summary>Painted on the back wall (chamber number).</summary>
     public string Label = "";
+    /// <summary>Reference solution for chambers built from rooms (handcrafted ones live in Testing/Solutions.cs).</summary>
+    public Func<Testing.Bot, IEnumerable<InputState>>? Solution;
 }
 
 public sealed class LevelBuilder
@@ -55,6 +57,8 @@ public sealed class LevelBuilder
     }
 
     public LevelBuilder Set(int x, int y, char c) { g[x, y] = c; return this; }
+
+    public char Get(int x, int y) => g[x, y];
 
     public string[] Build()
     {
@@ -88,6 +92,63 @@ public static class Levels
         b.Set(39, 6, '<').Fill(25, 3, 26, 9, '=');
         b.Set(13, 19, '1');
         return new LevelDef { Name = "Menu", Map = b.Build(), Gun = GunMode.None, BlueDir = Down, OrangeDir = Up };
+    }
+
+    static void AddComposed(List<LevelDef> list)
+    {
+        const Procgen.Room CC = Procgen.Room.CeilCross, HL = Procgen.Room.HighLedge, CX = Procgen.Room.CubeCross,
+            FL = Procgen.Room.Fling, LZ = Procgen.Room.Laser, UM = Procgen.Room.Umbrella, GE = Procgen.Room.Gel,
+            SC = Procgen.Room.ShelfCube, FC = Procgen.Room.FizzCube, UF = Procgen.Room.UpFling,
+            SK = Procgen.Room.Skylight, TB = Procgen.Room.TwinBeam, GI = Procgen.Room.GelIsland;
+        static Procgen.Spec N(Procgen.Room r) => new(r);
+        static Procgen.Spec Hd(Procgen.Room r) => new(r, true);
+
+        (string name, int seed, Procgen.Spec[] rooms, string[]? hints)[] chambers =
+        [
+            // two rooms
+            ("Shelf Life", 22, [N(SC), N(CC)], null),
+            ("Static", 23, [N(FC), N(HL)], null),
+            ("Skyward", 24, [N(CC), N(SK)], null),
+            ("Island Hopping", 25, [N(GI), N(CX)], null),
+            ("Lift Off", 26, [N(UF), N(UM)], null),
+            // three rooms
+            ("Crosswind", 27, [N(LZ), N(FL), N(CC)], null),
+            ("Heavy Lifting", 28, [N(SC), N(CX), N(HL)], null),
+            ("Double Vision", 29, [N(TB), N(GI), N(GE)], null),
+            ("Grid Runner", 30, [N(FC), N(UM), Hd(CC)], null),
+            ("Highs and Lows", 31, [N(HL), N(SK), N(UF)], null),
+            ("Momentum", 32, [N(FL), N(UF), N(CX)], ["Two flings back to back.", "Fall far, fly far - then fly high."]),
+            ("Refraction", 33, [Hd(LZ), N(TB), N(SC)], null),
+            ("Bounce Back", 34, [N(GE), N(GI), Hd(UM)], null),
+            // four rooms
+            ("Gauntlet", 35, [Hd(CC), N(FC), Hd(HL), N(SK)], null),
+            ("Cargo", 36, [Hd(SC), Hd(FC), Hd(CX), N(CC)], ["Three cubes, three buttons, three doors.", "Grids vaporise cubes. Portals don't."]),
+            ("Lightshow", 37, [N(LZ), Hd(SK), Hd(TB), N(GI)], ["Every beam has somewhere to be.", "Line up both beams in the twin room."]),
+            ("Stratosphere", 38, [N(FL), Hd(UF), Hd(GE), N(HL)], null),
+            ("Overclock", 39, [Hd(UM), Hd(LZ), N(CX), Hd(FL)], null),
+            ("Labyrinth", 40, [Hd(HL), N(SC), N(SK), N(UF)], null),
+            ("Deep End", 41, [Hd(CC), Hd(FL), N(GI), Hd(CX)], null),
+            ("Interference", 42, [Hd(TB), N(FC), Hd(UM), N(GE)], null),
+            // five rooms
+            ("Long Haul", 43, [Hd(CX), Hd(HL), Hd(SK), Hd(FL), N(UF)], ["Five rooms. Pace yourself.", "Every room resets your portals' purpose."]),
+            ("Pressure", 44, [Hd(SC), Hd(LZ), Hd(FC), N(GI), Hd(GE)], null),
+            ("Afterburner", 45, [Hd(FL), Hd(UF), Hd(CC), Hd(FL), Hd(HL)], ["Speed is everything here.", "Fall further to fly further."]),
+            ("Blackout", 46, [Hd(UM), Hd(TB), Hd(SK), Hd(LZ), N(CX)], ["Lasers everywhere. Cubes are shields, portals are mirrors."]),
+            ("Freefall", 47, [Hd(GE), N(GI), Hd(UF), Hd(UM), Hd(CC)], null),
+            ("Endurance", 48, [Hd(FC), Hd(SC), Hd(HL), Hd(SK), Hd(FL)], null),
+            ("Penultimate", 49, [Hd(LZ), Hd(CX), Hd(UF), Hd(FC), Hd(FL)], ["One more after this."]),
+            // the big one
+            ("Final Exam", 50, [Hd(CC), Hd(SC), Hd(FL), Hd(SK), Hd(UF), Hd(UM), Hd(TB), N(GI)],
+                ["Eight rooms. Everything you've learned.", "Good luck."]),
+        ];
+
+        foreach (var (name, seed, rooms, hints) in chambers)
+        {
+            var r = Procgen.Compose(rooms, seed, name, "", hints);
+            r.Def.Solution = r.Solution;
+            r.Def.Fling = r.Def.Fling || rooms.Any(x => x.Type is Procgen.Room.Fling or Procgen.Room.UpFling);
+            list.Add(r.Def);
+        }
     }
 
     static LevelDef[] BuildAll()
@@ -435,7 +496,7 @@ public static class Levels
             });
         }
 
-        // 21 - final exam: cube room, laser room with a grid, fling room
+        // 21 - midterm (was the original final exam): cube room, laser room with a grid, fling room
         {
             var b = LevelBuilder.Room(60, 26);
             // Room A
@@ -457,11 +518,14 @@ public static class Levels
             b.Set(10, 23, 'P').Set(57, 20, 'E');
             list.Add(new LevelDef
             {
-                Name = "Final Exam", Map = b.Build(), Fling = true,
+                Name = "Midterm", Map = b.Build(), Fling = true,
                 Hints = ["Everything you've learned. Three rooms. One way out.",
                          "Remember: portal shots pass through emancipation grids."]
             });
         }
+
+        // 22-50: authored chambers built from verified puzzle rooms, getting longer and harder
+        AddComposed(list);
 
         for (int i = 0; i < list.Count; i++) list[i].Label = $"{i + 1:00}";
         return list.ToArray();

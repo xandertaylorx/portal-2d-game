@@ -4,8 +4,22 @@ All notable changes to Portal 2D are listed here. Versions follow [semantic vers
 
 ## [Unreleased]
 
+### Added
+- **29 new chambers - 50 in total**, getting steadily harder: two-room chambers first, then three, four and five
+  rooms, ending in an eight-room **Final Exam** (chamber 50).
+- New puzzle rooms: cube on a high shelf, cube across an emancipation grid, upward fling to a high ledge, a ceiling
+  laser (beam fired upward), twin beams and a gel island. They also show up in Random Test.
+- "Hard" variants of every room type: higher ledges, wider goo, extra beams, tighter windows.
+- Chamber select has pages (arrow buttons or the left/right keys).
+
+### Changed
+- The original Final Exam is now **Midterm** (chamber 21). Your best time carries over.
+- Random Test runs can now reach six rooms.
+- Up to six door/button/laser circuits per chamber (was three).
+
 ### Fixed
 - macOS: after an in-game update, Finder's "Get Info" now shows the new version number.
+- A very fast fling could slide through a doorway into the next room. Fling rooms now end in a low wall.
 
 ## [2.2.2] - 2026-10-18
 

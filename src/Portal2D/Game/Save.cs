@@ -15,7 +15,7 @@ public sealed class SaveData
     [
         "Awakening", "Blue Sky", "Two Ends", "Weighted", "Toxic", "Speedy Thing", "Emancipation", "Through the Glass",
         "Relay", "Ascension", "Up and Over", "Spring Loaded", "Two Weights", "Gel Pit", "Umbrella", "Twin Beams",
-        "Grid Lock", "Final Exam"
+        "Grid Lock", "Midterm"
     ];
     public float Master { get; set; } = 0.8f;
     public float Sfx { get; set; } = 1f;
@@ -27,6 +27,7 @@ public sealed class SaveData
     public int RandomBestStreak { get; set; }
     public int RandomCleared { get; set; }
     public bool CheckUpdates { get; set; } = true;
+    public int Schema { get; set; }
 
     static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Portal2D", "save.json");
@@ -43,6 +44,12 @@ public sealed class SaveData
         catch
         {
             d = new SaveData();
+        }
+        // v2.3: the original "Final Exam" became "Midterm" (chamber 21); a new Final Exam is chamber 50
+        if (d.Schema < 3)
+        {
+            if (d.Times.Remove("Final Exam", out var fe)) d.Times["Midterm"] = fe;
+            d.Schema = 3;
         }
         if (d.Times.Count == 0 && d.Best.Length == Legacy18.Length)
             for (int i = 0; i < Legacy18.Length; i++)

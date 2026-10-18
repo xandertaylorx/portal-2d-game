@@ -116,7 +116,7 @@ public static class Preview
         o.Rect(28, 108, 140, 4, PP.BlueRamp[2]);
         o.Rect(176, 108, 140, 4, PP.OrangeRamp[2]);
         PixelFont.DrawPix(o, "A PIXEL-ART PORTAL PUZZLER", 30, 126, 1, PP.Cream);
-        PixelFont.DrawPix(o, "21 CHAMBERS  +  ENDLESS RANDOM TESTS", 30, 140, 1, C(150, 158, 172));
+        PixelFont.DrawPix(o, "50 CHAMBERS  +  ENDLESS RANDOM TESTS", 30, 140, 1, C(150, 158, 172));
         var hero = new Pix(16, 16);
         for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) hero.Set(x, y, Sprites.PlayerSheet.Get(x, y));
         o.Draw(hero.Scaled(6), 470, 60, flipX: true);

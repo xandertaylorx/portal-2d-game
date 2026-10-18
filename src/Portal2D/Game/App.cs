@@ -22,6 +22,7 @@ public sealed class App
     bool randomMode;
     Procgen.Result? random;
     int randomSeed, streak;
+    int selPage = -1;
     LevelDef CurrentDef => randomMode ? random!.Def : Levels.All[level];
 
     Camera2D cam;
@@ -520,7 +521,7 @@ public sealed class App
         if (UI.Button("random", new Rectangle(x, y, bw, h), "RANDOM TEST", accent: PP.Exit, sub: rsub))
             StartRandom(Environment.TickCount & 0xFFFFF, newRun: true);
         y += h + gap;
-        if (UI.Button("select", new Rectangle(x, y, bw, h), "SELECT CHAMBER")) Go(() => SetScreen(Screen.Select));
+        if (UI.Button("select", new Rectangle(x, y, bw, h), "SELECT CHAMBER")) Go(() => { selPage = -1; SetScreen(Screen.Select); });
         y += h + gap;
         if (UI.Button("options", new Rectangle(x, y, bw, h), "OPTIONS")) Go(() => SetScreen(Screen.Options));
         y += h + gap;
@@ -579,17 +580,22 @@ public sealed class App
     {
         int done = save.Best.Count(b => b > 0);
         Header("SELECT CHAMBER", $"{done} OF {Levels.All.Length} COMPLETE   TOTAL DEATHS {save.TotalDeaths}");
-        const int cols = 6;
+        const int cols = 6, perPage = 18;
         const float cw = 180, ch = 132, gx = 14, gy = 14;
         float x0 = MathF.Round((K.ScreenW - (cols * cw + (cols - 1) * gx)) / 2), y0 = 136;
-        for (int i = 0; i < Levels.All.Length; i++)
+        int pages = (Levels.All.Length + perPage - 1) / perPage;
+        if (selPage < 0) selPage = Math.Min(ContinueLevel / perPage, pages - 1);
+        if (Raylib.IsKeyPressed(KeyboardKey.Right) && selPage < pages - 1) { selPage++; stateT = 0.2f; audio.Click(); }
+        if (Raylib.IsKeyPressed(KeyboardKey.Left) && selPage > 0) { selPage--; stateT = 0.2f; audio.Click(); }
+        int first = selPage * perPage;
+        for (int i = first; i < Math.Min(first + perPage, Levels.All.Length); i++)
         {
-            int col = i % cols, row = i / cols;
+            int col = (i - first) % cols, row = (i - first) / cols;
             var r = new Rectangle(x0 + col * (cw + gx), y0 + row * (ch + gy), cw, ch);
             bool locked = !Unlocked(i);
             bool complete = save.Best[i] > 0;
             bool over = !locked && UI.Contains(r, UI.Mouse);
-            if (stateT * 4 - i * 0.12f < 0) continue;
+            if (stateT * 4 - (i - first) * 0.12f < 0) continue;
             if (over) r.Y -= 4;
             var accent = complete ? PP.Exit : locked ? C(70, 76, 86) : PP.BlueRamp[2];
             UI.Panel(r, 1, over ? PP.BlueRamp[2] : null);
@@ -613,9 +619,16 @@ public sealed class App
             if (over && UI.Click) { audio.Click(); StartLevel(i); }
         }
         float by = y0 + 3 * (ch + gy) + 6;
+        float full = cols * cw + (cols - 1) * gx;
         string rs = save.RandomBestStreak > 0 ? $"BEST STREAK {save.RandomBestStreak}   CLEARED {save.RandomCleared}" : "PROCEDURALLY GENERATED - NEVER THE SAME TWICE";
-        if (UI.Button("sel_random", new Rectangle(x0, by, cols * cw + (cols - 1) * gx, 60), "RANDOM TEST", accent: PP.Exit, sub: rs))
+        if (UI.Button("sel_random", new Rectangle(x0, by, full - 300, 60), "RANDOM TEST", accent: PP.Exit, sub: rs))
             StartRandom(Environment.TickCount & 0xFFFFF, newRun: true);
+        // pages
+        float px = x0 + full - 284;
+        if (selPage > 0 && UI.SmallButton("sel_prev", new Rectangle(px, by + 6, 70, 48), "<")) { selPage--; stateT = 0.2f; }
+        UI.Text($"{first + 1}-{Math.Min(first + perPage, Levels.All.Length)}", new Vector2(px + 142, by + 30), 16, PP.Cream, UI.Align.Center);
+        UI.Text($"PAGE {selPage + 1}/{pages}", new Vector2(px + 142, by + 12), 16, Dim, UI.Align.Center);
+        if (selPage < pages - 1 && UI.SmallButton("sel_next", new Rectangle(px + 214, by + 6, 70, 48), ">")) { selPage++; stateT = 0.2f; }
     }
 
     static void DrawLock(Vector2 c)

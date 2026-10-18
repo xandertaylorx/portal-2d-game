@@ -12,6 +12,7 @@ public static class Solutions
 
     public static IEnumerable<InputState> For(int level, Bot b)
     {
+        if (Levels.All[level].Solution is { } composed) return composed(b);
         var p = b.Player;
         int n = 0;
         IEnumerable<InputState> Mark() => b.Do(() => n = p.Teleports);
@@ -129,6 +130,11 @@ public static class TestRunner
                 failures++;
                 result += $"  player=({pl.Pos.X / K.Tile:0.0},{pl.Pos.Y / K.Tile:0.0}) vel=({pl.Vel.X:0},{pl.Vel.Y:0}) doors=[{string.Join(",", w.DoorOpen.Select(d => d.ToString("0.0")))}] " +
                           $"B={Describe(w.Portals[0])} O={Describe(w.Portals[1])}";
+                if (verbose)
+                {
+                    foreach (var l in w.Lasers) result += $"\n    laser ({l.A.X / K.Tile:0.0},{l.A.Y / K.Tile:0.0}) -> ({l.B.X / K.Tile:0.0},{l.B.Y / K.Tile:0.0})";
+                    foreach (var rc in w.Receivers) result += $"\n    receiver ({rc.X},{rc.Y}) g{rc.Group} active={rc.Active}";
+                }
             }
             Console.WriteLine($"{i + 1,2}. {def.Name,-18} {result}");
         }

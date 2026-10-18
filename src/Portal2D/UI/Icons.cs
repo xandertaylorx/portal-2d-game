@@ -15,7 +15,7 @@ public static class Icons
         var all = string.Concat(def.Map);
         var list = new List<Mech> { Mech.Portal };
         if (all.Contains('C')) list.Add(Mech.Cube);
-        if (all.IndexOfAny(['1', '2', '3']) >= 0) list.Add(Mech.Button);
+        if (all.Any(ch => World.ButtonGroup(ch) >= 0)) list.Add(Mech.Button);
         if (all.Contains('~')) list.Add(Mech.Goo);
         if (all.Contains('|')) list.Add(Mech.Grid);
         if (all.IndexOfAny(['<', '>', '^', 'v']) >= 0) list.Add(Mech.Laser);

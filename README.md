@@ -4,7 +4,7 @@
 
 <p align="center">
   <b>A pixel-art, side-scrolling portal puzzler, written from scratch in C#.</b><br>
-  21 handcrafted test chambers, an endless procedurally generated mode,
+  50 test chambers that get steadily harder, an endless procedurally generated mode,
   and portals you can actually see through.
 </p>
 
@@ -30,8 +30,10 @@
 
 ## Features
 
-- **21 handcrafted chambers** that teach and then combine: momentum flings, weighted cubes and buttons, toxic goo,
-  emancipation grids, lasers and receivers, glass, and blue repulsion gel.
+- **50 chambers** that teach and then combine: momentum flings, weighted cubes and buttons, toxic goo,
+  emancipation grids, lasers and receivers, glass, and blue repulsion gel. Chambers 1-21 are fully handcrafted.
+  Chambers 22-50 are authored sequences of verified puzzle rooms that grow from two rooms to five, with "hard" room
+  variants mixed in, ending in an eight-room Final Exam.
 - **Random Test mode**: endless chambers assembled from randomised puzzle rooms. Each run gets harder, and the game
   tracks your best streak.
 - **Portal lenses**: a fragment shader turns each linked portal into a fish-eye window onto the other side, with
