@@ -10,7 +10,8 @@ public enum GunMode { None, BlueOnly, Both }
 ///   '~' toxic goo       '|' emancipation grid          'P' player start         'E' exit
 ///   'C' cube spawn      '1','2','3' floor buttons      '4','5','6' laser receivers
 ///   'a','b','c' doors (opened by group 1/2/3)          '>','<','^','v' laser emitters
-///   'J' blue repulsion gel (bounce pad)
+///   'J' blue repulsion gel (bounce pad)   'G' orange speed gel   'Q'/'q' launch plate (up-right / up-left)
+///   'M'/'N' mirror cube spawn ('/' and '\\')   'T','U','V','W','Y','Z' timed buttons (groups 1-6)
 ///   'u' / 'o' fixed blue / orange portal marker (portal sits on the wall in BlueDir / OrangeDir)
 /// </summary>
 public sealed class LevelDef
@@ -24,6 +25,8 @@ public sealed class LevelDef
     public bool Fling;
     /// <summary>Painted on the back wall (chamber number).</summary>
     public string Label = "";
+    /// <summary>Wall colour grade (0 = default). Purely cosmetic.</summary>
+    public int Theme;
     /// <summary>Reference solution for chambers built from rooms (handcrafted ones live in Testing/Solutions.cs).</summary>
     public Func<Testing.Bot, IEnumerable<InputState>>? Solution;
 }
@@ -77,6 +80,9 @@ public static class Levels
 {
     static readonly Int2 Left = new(-1, 0), Right = new(1, 0), Up = new(0, -1), Down = new(0, 1);
 
+    /// <summary>Difficulty score (sum of room weights) and room count of each composed chamber, for sanity checks.</summary>
+    public static readonly List<(string Name, int Rooms, int Score)> ComposedInfo = new();
+
     public static readonly LevelDef Menu = BuildMenu();
     public static readonly LevelDef[] All = BuildAll();
 
@@ -99,54 +105,62 @@ public static class Levels
         const Procgen.Room CC = Procgen.Room.CeilCross, HL = Procgen.Room.HighLedge, CX = Procgen.Room.CubeCross,
             FL = Procgen.Room.Fling, LZ = Procgen.Room.Laser, UM = Procgen.Room.Umbrella, GE = Procgen.Room.Gel,
             SC = Procgen.Room.ShelfCube, FC = Procgen.Room.FizzCube, UF = Procgen.Room.UpFling,
-            SK = Procgen.Room.Skylight, TB = Procgen.Room.TwinBeam, GI = Procgen.Room.GelIsland;
+            SK = Procgen.Room.Skylight, TB = Procgen.Room.TwinBeam, GI = Procgen.Room.GelIsland,
+            PH = Procgen.Room.PlateHop, PC = Procgen.Room.PlateCarry, SP = Procgen.Room.Sprint,
+            BS = Procgen.Room.BankShot, CW = Procgen.Room.Clockwork, GG = Procgen.Room.GridGoo,
+            GS = Procgen.Room.GelStairs, GK = Procgen.Room.GelCarry;
         static Procgen.Spec N(Procgen.Room r) => new(r);
         static Procgen.Spec Hd(Procgen.Room r) => new(r, true);
 
+        // Ordered by difficulty (sum of room weights). Every few chambers introduce something new:
+        // launch plates, orange speed gel, the timed button, grid wipes, gel stairs, mirror cubes.
         (string name, int seed, Procgen.Spec[] rooms, string[]? hints)[] chambers =
         [
             // two rooms
-            ("Shelf Life", 22, [N(SC), N(CC)], null),
-            ("Static", 23, [N(FC), N(HL)], null),
-            ("Skyward", 24, [N(CC), N(SK)], null),
-            ("Island Hopping", 25, [N(GI), N(CX)], null),
-            ("Lift Off", 26, [N(UF), N(UM)], null),
+            ("Launch Day", 22, [N(PH), N(CC)], null),
+            ("Quick Feet", 23, [N(SP), N(HL)], null),
+            ("Static", 24, [N(FC), N(HL)], null),
+            ("Shelf Life", 25, [N(SC), N(CC)], null),
+            ("Race the Clock", 26, [N(CW), N(CC)], ["Step on the yellow button, then run."]),
+            ("Island Hopping", 27, [N(GI), N(CX)], null),
+            ("Wipeout", 28, [N(GG), N(HL)], null),
+            ("Double Bounce", 29, [N(GS), N(UM)], null),
+            ("Bank Shot", 30, [N(BS), N(CC)], ["The cube with the mirror bends light.", "Riding a plate with a cube is allowed."]),
             // three rooms
-            ("Crosswind", 27, [N(LZ), N(FL), N(CC)], null),
-            ("Heavy Lifting", 28, [N(SC), N(CX), N(HL)], null),
-            ("Double Vision", 29, [N(TB), N(GI), N(GE)], null),
-            ("Grid Runner", 30, [N(FC), N(UM), Hd(CC)], null),
-            ("Highs and Lows", 31, [N(HL), N(SK), N(UF)], null),
-            ("Momentum", 32, [N(FL), N(UF), N(CX)], ["Two flings back to back.", "Fall far, fly far - then fly high."]),
-            ("Refraction", 33, [Hd(LZ), N(TB), N(SC)], null),
-            ("Bounce Back", 34, [N(GE), N(GI), Hd(UM)], null),
+            ("Heavy Lifting", 31, [N(SC), N(CX), N(HL)], null),
+            ("Springboard", 32, [N(GK), N(SP), N(HL)], null),
+            ("Crosswind", 33, [N(LZ), N(FL), N(CC)], null),
+            ("Grid Runner", 34, [N(FC), N(UM), Hd(CC)], null),
+            ("Catapult", 35, [N(PC), N(SK), N(CC)], null),
+            ("Mirror Image", 36, [N(BS), N(GI), N(FC)], null),
+            ("Double Vision", 37, [N(TB), N(GI), N(GE)], null),
+            ("Refraction", 38, [Hd(LZ), N(TB), N(SC)], null),
+            ("Slingshot", 39, [Hd(SP), N(PH), Hd(GG)], null),
+            ("Momentum", 40, [N(FL), N(UF), N(CX)], ["Two flings back to back.", "Fall far, fly far - then fly high."]),
             // four rooms
-            ("Gauntlet", 35, [Hd(CC), N(FC), Hd(HL), N(SK)], null),
-            ("Cargo", 36, [Hd(SC), Hd(FC), Hd(CX), N(CC)], ["Three cubes, three buttons, three doors.", "Grids vaporise cubes. Portals don't."]),
-            ("Lightshow", 37, [N(LZ), Hd(SK), Hd(TB), N(GI)], ["Every beam has somewhere to be.", "Line up both beams in the twin room."]),
-            ("Stratosphere", 38, [N(FL), Hd(UF), Hd(GE), N(HL)], null),
-            ("Overclock", 39, [Hd(UM), Hd(LZ), N(CX), Hd(FL)], null),
-            ("Labyrinth", 40, [Hd(HL), N(SC), N(SK), N(UF)], null),
-            ("Deep End", 41, [Hd(CC), Hd(FL), N(GI), Hd(CX)], null),
-            ("Interference", 42, [Hd(TB), N(FC), Hd(UM), N(GE)], null),
+            ("Gauntlet", 41, [Hd(CC), N(FC), Hd(HL), N(SK)], null),
+            ("Cargo", 42, [Hd(SC), Hd(FC), Hd(CX), N(CC)], ["Three cubes, three buttons, three doors.", "Grids vaporise cubes. Portals don't."]),
+            ("Time Trial", 43, [N(CW), Hd(SP), N(GG), Hd(PH)], null),
+            ("Overclock", 44, [Hd(UM), Hd(LZ), N(CX), Hd(FL)], null),
+            ("Lightshow", 45, [N(LZ), Hd(SK), Hd(TB), N(GI)], ["Every beam has somewhere to be.", "Line up both beams in the twin room."]),
+            ("Stratosphere", 46, [N(FL), Hd(UF), Hd(GE), N(HL)], null),
+            ("Reflections", 47, [N(BS), Hd(LZ), Hd(SK), N(GG)], null),
             // five rooms
-            ("Long Haul", 43, [Hd(CX), Hd(HL), Hd(SK), Hd(FL), N(UF)], ["Five rooms. Pace yourself.", "Every room resets your portals' purpose."]),
-            ("Pressure", 44, [Hd(SC), Hd(LZ), Hd(FC), N(GI), Hd(GE)], null),
-            ("Afterburner", 45, [Hd(FL), Hd(UF), Hd(CC), Hd(FL), Hd(HL)], ["Speed is everything here.", "Fall further to fly further."]),
-            ("Blackout", 46, [Hd(UM), Hd(TB), Hd(SK), Hd(LZ), N(CX)], ["Lasers everywhere. Cubes are shields, portals are mirrors."]),
-            ("Freefall", 47, [Hd(GE), N(GI), Hd(UF), Hd(UM), Hd(CC)], null),
-            ("Endurance", 48, [Hd(FC), Hd(SC), Hd(HL), Hd(SK), Hd(FL)], null),
-            ("Penultimate", 49, [Hd(LZ), Hd(CX), Hd(UF), Hd(FC), Hd(FL)], ["One more after this."]),
+            ("Long Haul", 48, [Hd(CX), Hd(HL), Hd(SK), Hd(FL), N(UF)], ["Five rooms. Pace yourself."]),
+            ("Pressure", 49, [Hd(SC), Hd(CW), Hd(FC), N(GS), Hd(GK)], null),
             // the big one
-            ("Final Exam", 50, [Hd(CC), Hd(SC), Hd(FL), Hd(SK), Hd(UF), Hd(UM), Hd(TB), N(GI)],
+            ("Final Exam", 50, [Hd(CC), Hd(SC), Hd(FL), Hd(BS), Hd(UF), Hd(CW), Hd(TB), N(GI)],
                 ["Eight rooms. Everything you've learned.", "Good luck."]),
         ];
 
+        int tier = 0;
         foreach (var (name, seed, rooms, hints) in chambers)
         {
             var r = Procgen.Compose(rooms, seed, name, "", hints);
             r.Def.Solution = r.Solution;
             r.Def.Fling = r.Def.Fling || rooms.Any(x => x.Type is Procgen.Room.Fling or Procgen.Room.UpFling);
+            r.Def.Theme = 1 + tier++ / 5 % 6;
+            ComposedInfo.Add((name, rooms.Length, rooms.Sum(Procgen.Weight)));
             list.Add(r.Def);
         }
     }

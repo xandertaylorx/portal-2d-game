@@ -415,9 +415,15 @@ public sealed class Renderer
         int h = b.Press > 0.5f ? 4 : 8;
         Raylib.DrawRectangle((int)cx - 28, (int)fy - 6, 56, 6, C(43, 47, 58));
         Raylib.DrawRectangle((int)cx - 28, (int)fy - 6, 56, 2, C(74, 81, 99));
-        var dome = b.Press > 0.5f ? C(255, 120, 70) : C(217, 69, 58);
+        var dome = b.Timed ? (b.Press > 0.5f ? C(255, 214, 90) : C(230, 170, 40)) : b.Press > 0.5f ? C(255, 120, 70) : C(217, 69, 58);
         Raylib.DrawRectangle((int)cx - 18, (int)fy - 6 - h, 36, h, dome);
         Raylib.DrawRectangle((int)cx - 16, (int)fy - 6 - h, 28, 2, C(255, 160, 140));
+        if (b.Timed)
+        {
+            // countdown bar: how long the door stays open
+            Raylib.DrawRectangle((int)cx - 20, (int)fy - 24, 40, 5, C(24, 27, 34));
+            Raylib.DrawRectangle((int)cx - 19, (int)fy - 23, (int)(38 * b.HoldT / World.ButtonHold), 3, C(255, 214, 90));
+        }
         if (b.Press > 0.05f)
         {
             Raylib.BeginBlendMode(BlendMode.Additive);
@@ -444,6 +450,15 @@ public sealed class Renderer
             Raylib.DrawTexturePro(Sprites.CubeTex, new Rectangle(0, 0, 16, 16), dest, Vector2.Zero, 0, C(255, 255, 255, (int)(200 * Clamp01(c.DissolveT))));
             Raylib.EndBlendMode();
             return;
+        }
+        if (c.Mirror != 0)
+        {
+            // mirror cube: a silvery diagonal showing which way it bends a beam
+            Raylib.DrawRectangle((int)pos.X - 12, (int)pos.Y - 12, 24, 24, C(120, 200, 255, 90));
+            var a = c.Mirror > 0 ? new Vector2(pos.X - 12, pos.Y + 12) : new Vector2(pos.X - 12, pos.Y - 12);
+            var e = c.Mirror > 0 ? new Vector2(pos.X + 12, pos.Y - 12) : new Vector2(pos.X + 12, pos.Y + 12);
+            Raylib.DrawLineEx(a, e, 4, C(225, 245, 255));
+            Raylib.DrawLineEx(a, e, 1.5f, C(255, 255, 255));
         }
         float glow = MathF.Max(c.Held ? 1 : 0, MathF.Max(c.OnButtonGlow, c.TeleportFlash));
         if (glow > 0.05f)

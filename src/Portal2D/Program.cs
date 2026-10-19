@@ -19,8 +19,12 @@ public static class Program
         }
         if (args.Contains("--proctrace"))
         {
-            Procgen.Force = Enum.Parse<Procgen.Room>(args[Array.IndexOf(args, "--proctrace") + 1]);
-            var r = Procgen.Generate(1, 2);
+            // --proctrace Room [hard] [seed]: one room on its own, with a frame-by-frame trace of the bot
+            int ti = Array.IndexOf(args, "--proctrace");
+            var room = Enum.Parse<Procgen.Room>(args[ti + 1]);
+            bool hardRoom = args.Contains("hard");
+            int traceSeed = args.Skip(ti + 2).Select(a => int.TryParse(a, out var n) ? n : -1).FirstOrDefault(n => n > 0);
+            var r = Procgen.Compose([new Procgen.Spec(room, hardRoom)], traceSeed > 0 ? traceSeed : 1, "trace", "", null);
             foreach (var row in r.Def.Map) Console.WriteLine(row);
             var w = new World(r.Def); var bot = new Testing.Bot(w);
             using var e = r.Solution(bot).GetEnumerator();
@@ -28,9 +32,16 @@ public static class Program
             {
                 Testing.TestRunner.StepFrame(w, e.MoveNext() ? e.Current : bot.In());
                 var pl = w.Player!;
-                if (f % 15 == 0) Console.WriteLine($"t={f / 60f:0.00} p=({pl.Pos.X / 32:0.0},{pl.Pos.Y / 32:0.0}) v=({pl.Vel.X:0},{pl.Vel.Y:0}) g={pl.OnGround}");
+                if (f % (args.Contains("fine") ? 3 : 15) == 0) Console.WriteLine($"t={f / 60f:0.00} p=({pl.Pos.X / 32:0.0},{pl.Pos.Y / 32:0.0}) v=({pl.Vel.X:0},{pl.Vel.Y:0}) g={pl.OnGround}");
                 if (pl.Dead || pl.Won) { Console.WriteLine(pl.Dead ? "DEAD" : "WON"); break; }
             }
+            return 0;
+        }
+        if (args.Contains("--scores"))
+        {
+            _ = Levels.All;
+            int n = 22;
+            foreach (var (name, rooms, score) in Levels.ComposedInfo) Console.WriteLine($"{n++,3} {name,-16} rooms={rooms} score={score}");
             return 0;
         }
         if (args.Contains("--procdiag")) { Console.Write(Procgen.Diagnose(20)); return 0; }
@@ -42,7 +53,7 @@ public static class Program
             var sw = System.Diagnostics.Stopwatch.StartNew();
             for (int seed = 1; seed <= count; seed++)
             {
-                var r = Procgen.Generate(seed, seed % 7);
+                var r = Procgen.Generate(seed, seed % 15);
                 bool good = Procgen.Verify(r);
                 if (good) ok++;
                 totalAttempts += r.Attempts;

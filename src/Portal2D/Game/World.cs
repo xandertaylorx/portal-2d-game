@@ -40,6 +40,9 @@ public sealed class World
     public const float MaxWalk = 250f;
     public const float MaxFall = 1500f;
     public const float GelBounce = 1000f;
+    public const float PlateVy = 1060f, PlateVx = 340f;
+    public const float FastWalk = 520f;
+    public const float ButtonHold = 4f;
     const int T = K.Tile;
 
     public readonly LevelDef Def;
@@ -84,8 +87,10 @@ public sealed class World
             {
                 case 'P': Player = new Player(standPos - new Vector2(0, 15)); c = ' '; break;
                 case 'C': Cubes.Add(new Cube(standPos - new Vector2(0, 14))); c = ' '; break;
+                case 'M': Cubes.Add(new Cube(standPos - new Vector2(0, 14)) { Mirror = 1 }); c = ' '; break;
+                case 'N': Cubes.Add(new Cube(standPos - new Vector2(0, 14)) { Mirror = -1 }); c = ' '; break;
                 case 'E': Exit = new Int2(x, y); HasExit = true; c = ' '; break;
-                case var bc when ButtonGroup(bc) >= 0: Buttons.Add(new FloorButton { X = x, Y = y, Group = ButtonGroup(bc) }); c = ' '; break;
+                case var bc when ButtonGroup(bc) >= 0: Buttons.Add(new FloorButton { X = x, Y = y, Group = ButtonGroup(bc), Timed = IsTimedButton(bc) }); c = ' '; break;
                 case var rc when ReceiverGroup(rc) >= 0: Receivers.Add(new Receiver { X = x, Y = y, Group = ReceiverGroup(rc) }); break;
                 case '>': Emitters.Add(new Emitter { X = x, Y = y, Dir = new Vector2(1, 0) }); break;
                 case '<': Emitters.Add(new Emitter { X = x, Y = y, Dir = new Vector2(-1, 0) }); break;
@@ -120,7 +125,11 @@ public sealed class World
 
     // circuit groups 0-5: doors a-f, buttons 1 2 3 x y z, laser receivers 4 5 6 r s t
     public static bool IsDoor(char c) => c is >= 'a' and <= 'f';
-    public static int ButtonGroup(char c) => c switch { '1' => 0, '2' => 1, '3' => 2, 'x' => 3, 'y' => 4, 'z' => 5, _ => -1 };
+    public static int ButtonGroup(char c) => c switch { '1' or 'T' => 0, '2' or 'U' => 1, '3' or 'V' => 2, 'x' or 'W' => 3, 'y' or 'Y' => 4, 'z' or 'Z' => 5, _ => -1 };
+    /// <summary>Timed buttons ('T','U','V','W','Y','Z') stay down for a few seconds after they are pressed.</summary>
+    public static bool IsTimedButton(char c) => c is 'T' or 'U' or 'V' or 'W' or 'Y' or 'Z';
+    public static char TimedButtonChar(int g) => "TUVWYZ"[g];
+    public static bool IsPlate(char c) => c is 'Q' or 'q';
     public static int ReceiverGroup(char c) => c switch { '4' => 0, '5' => 1, '6' => 2, 'r' => 3, 's' => 4, 't' => 5, _ => -1 };
     public static bool IsReceiver(char c) => ReceiverGroup(c) >= 0;
     public static char DoorChar(int g) => (char)('a' + g);
@@ -132,7 +141,7 @@ public sealed class World
         char c = At(x, y);
         return c switch
         {
-            '#' or 'X' or '=' or '<' or '>' or '^' or 'v' or 'J' => true,
+            '#' or 'X' or '=' or '<' or '>' or '^' or 'v' or 'J' or 'Q' or 'q' or 'G' => true,
             >= 'a' and <= 'f' => DoorOpen[c - 'a'] < 0.98f,
             _ when IsReceiver(c) => true,
             _ => false
@@ -319,10 +328,11 @@ public sealed class World
         int dir = input.MoveX;
         if (p.OnGround)
         {
-            if (dir != 0 && MathF.Abs(p.Vel.X) > MaxWalk && MathF.Sign(p.Vel.X) == dir)
-                p.Vel.X = MathX.Approach(p.Vel.X, dir * MaxWalk, 1400 * dt);
+            float top = TileUnder(p) == 'G' ? FastWalk : MaxWalk;
+            if (dir != 0 && MathF.Abs(p.Vel.X) > top && MathF.Sign(p.Vel.X) == dir)
+                p.Vel.X = MathX.Approach(p.Vel.X, dir * top, 1400 * dt);
             else
-                p.Vel.X = MathX.Approach(p.Vel.X, dir * MaxWalk, (dir == 0 ? 2600 : 2400) * dt);
+                p.Vel.X = MathX.Approach(p.Vel.X, dir * top, (dir == 0 ? 2600 : 2400) * dt);
         }
         else
         {
@@ -439,6 +449,9 @@ public sealed class World
 
     // ---------------------------------------------------------------- physics
 
+    /// <summary>The tile directly beneath a body's feet.</summary>
+    public char TileUnder(Body b) => At((int)MathF.Floor(b.Pos.X / T), (int)MathF.Floor((b.Pos.Y + b.Half.Y + 2) / T));
+
     bool UsesPortals(Body b) => b is not Cube { Held: true };
 
     bool PassableFor(Body b, int x, int y)
@@ -534,6 +547,15 @@ public sealed class World
                             if (b is Player pl) pl.JumpCut = true;
                             Fx.Burst(new Vector2(b.Pos.X, y * T), Palette.Blue, 10, 160, 0.4f, 2.5f, 300, PKind.Dot, true, new Vector2(0, -1), 0.9f);
                             Emit(Sfx.Jump, b.Pos);
+                            goto boxes;
+                        }
+                        if (IsPlate(At(x, y)) && b is not Cube { Held: true })
+                        {
+                            // launch plate: a fixed kick up and sideways, whatever the impact speed
+                            b.Vel = new Vector2(At(x, y) == 'Q' ? PlateVx : -PlateVx, -PlateVy);
+                            if (b is Player pl) pl.JumpCut = true;
+                            Fx.Burst(new Vector2(b.Pos.X, y * T), Palette.Orange, 12, 200, 0.4f, 2.5f, 300, PKind.Dot, true, new Vector2(0, -1), 0.9f);
+                            Emit(Sfx.Jump, b.Pos, 2);
                             goto boxes;
                         }
                         if (b.Vel.Y > 0) b.Vel.Y = 0;
@@ -644,11 +666,12 @@ public sealed class World
                 var hit = CastGrid(origin, dir, 5000, BlocksLaser);
                 float dist = hit.Dist;
                 int kind = 0; // 0 tile/none, 1 cube, 2 player
+                Cube? hitCube = null;
                 foreach (var c in Cubes)
                 {
                     if (!c.Solid) continue;
                     float t = MathX.RayAabb(origin, dir, c.Rect);
-                    if (t >= 0 && t < dist) { dist = t; kind = 1; }
+                    if (t >= 0 && t < dist) { dist = t; kind = 1; hitCube = c; }
                 }
                 if (Player is { Dead: false, Won: false } pl)
                 {
@@ -660,6 +683,14 @@ public sealed class World
                 var end = origin + dir * dist;
                 Lasers.Add(new LaserSeg { A = origin, B = end });
                 if (kind == 2) { hitPlayer = true; LaserImpacts.Add(end); break; }
+                if (kind == 1 && hitCube is { Mirror: not 0 } mirror)
+                {
+                    // mirror cube: '/' turns a beam (dx,dy) into (-dy,-dx), '\' into (dy,dx)
+                    dir = mirror.Mirror > 0 ? new Vector2(-dir.Y, -dir.X) : new Vector2(dir.Y, dir.X);
+                    origin = mirror.Pos + dir * (mirror.Half.X + 0.6f);
+                    LaserImpacts.Add(end);
+                    continue;
+                }
                 if (kind == 1 || !hit.Hit) { LaserImpacts.Add(end); break; }
 
                 var p = Linked ? PortalOnFace(hit.Tile, hit.Normal) : null;
@@ -689,6 +720,11 @@ public sealed class World
             if (Player is { Dead: false } pl && MathX.Overlaps(pl.Rect, trig)) pressed = true;
             foreach (var c in Cubes)
                 if (c.Solid && !c.Held && MathX.Overlaps(c.Rect, trig)) { pressed = true; c.OnButtonGlow = 1; }
+            if (b.Timed)
+            {
+                if (pressed) b.HoldT = ButtonHold; else b.HoldT = MathF.Max(0, b.HoldT - dt);
+                pressed = b.HoldT > 0;
+            }
             if (pressed != b.Pressed && !initial) Emit(pressed ? Sfx.ButtonDown : Sfx.ButtonUp, new Vector2(b.X * T + 16, b.Y * T + 28));
             b.Pressed = pressed;
             b.Press = MathX.Approach(b.Press, pressed ? 1 : 0, dt * 10);

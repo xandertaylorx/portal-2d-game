@@ -2,6 +2,22 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.4.0] - 2026-10-19
+
+### Added
+- **Five new mechanics**: orange **launch plates** that throw you up and sideways, orange **speed gel** that lets you
+  run fast enough to jump huge gaps, **timed buttons** (yellow) that hold a door open for only a few seconds,
+  **mirror cubes** that bend laser beams, and chained **gel pads** to bounce up like stairs.
+- Nine new puzzle rooms built on them (plate hop, carrying a cube on a plate or gel pad, sprint gap, bank shot,
+  clockwork door, grid-wipe crossing, gel stairs). They also appear in Random Test.
+- Each chamber family now has its own wall colour.
+
+### Changed
+- **Chambers 22-50 are rebuilt** and ordered by real difficulty. New ideas are introduced every few chambers
+  instead of the same rooms in new orders.
+- **Random Test is far more varied**: it draws from 21 room types, never repeats a room within a chamber, and the
+  harder rooms only unlock as your streak grows. Runs can reach seven rooms.
+
 ## [2.3.0] - 2026-10-18
 
 ### Added

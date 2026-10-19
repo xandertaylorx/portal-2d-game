@@ -50,6 +50,7 @@ public static class PP
     public static readonly Color Hazard = C(245, 197, 66);
     public static readonly Color Fizz = C(143, 211, 255);
     public static readonly Color Gel = C(63, 167, 255);
+    public static readonly Color SpeedGel = C(255, 138, 40);
 }
 
 public static class Sprites

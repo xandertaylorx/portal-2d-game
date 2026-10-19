@@ -34,7 +34,8 @@ public static class Procgen
     public enum Room
     {
         CeilCross, HighLedge, CubeCross, Fling, Laser, Umbrella, Gel,
-        ShelfCube, FizzCube, UpFling, Skylight, TwinBeam, GelIsland
+        ShelfCube, FizzCube, UpFling, Skylight, TwinBeam, GelIsland,
+        PlateHop, PlateCarry, Sprint, BankShot, Clockwork, GridGoo, GelStairs, GelCarry
     }
 
     public readonly record struct Spec(Room Type, bool Hard = false);
@@ -82,22 +83,41 @@ public static class Procgen
         return Compose([new(Room.CeilCross)], seed, $"Random Test {seed}", "??", null);
     }
 
+    /// <summary>How demanding a room is (1 = trivial, 4 = needs several ideas at once). Hard variants add one.</summary>
+    public static int Weight(Spec s) => BaseWeight(s.Type) + (s.Hard ? 1 : 0);
+
+    static int BaseWeight(Room r) => r switch
+    {
+        Room.CeilCross or Room.HighLedge => 1,
+        Room.GelIsland or Room.PlateHop or Room.Sprint or Room.ShelfCube or Room.CubeCross or Room.FizzCube
+            or Room.Umbrella or Room.Laser => 2,
+        Room.Skylight or Room.Gel or Room.Fling or Room.TwinBeam or Room.PlateCarry or Room.Clockwork
+            or Room.GridGoo or Room.GelStairs or Room.GelCarry => 3,
+        _ => 4 // UpFling, BankShot
+    };
+
     static List<Spec> RandomPlan(Random rng, int difficulty)
     {
-        int rooms = Math.Clamp(2 + difficulty / 2, 2, 6);
+        int rooms = Math.Clamp(2 + difficulty / 2, 2, 7);
+        int cap = 2 + difficulty / 2;                       // heaviest room type on offer
+        float hardChance = difficulty < 3 ? 0 : MathF.Min(0.65f, (difficulty - 2) * 0.1f);
         var all = Enum.GetValues<Room>();
         var plan = new List<Spec>();
         bool high = false;
         for (int i = 0; i < rooms; i++)
         {
             Room pick;
-            int guard = 0;
-            do pick = Force ?? all[rng.Next(all.Length)];
-            while (Force == null && guard++ < 80 && ((plan.Count > 0 && plan[^1].Type == pick) || (NeedsFloorEntry(pick) && high)
-                                    || (difficulty == 0 && pick is Room.Fling or Room.Gel or Room.UpFling)
-                                    || (Gated(pick) && plan.Count(p => Gated(p.Type)) >= World.Groups)));
-            bool hard = difficulty >= 4 && rng.Next(3) == 0;
-            plan.Add(new Spec(pick, hard));
+            if (Force is Room forced) pick = forced;
+            else
+            {
+                // never repeat a room within a chamber (there are plenty to choose from), keep the weight in range
+                var pool = all.Where(r => plan.All(p => p.Type != r) && BaseWeight(r) <= cap
+                    && !(NeedsFloorEntry(r) && high)
+                    && !(Gated(r) && plan.Count(p => Gated(p.Type)) >= World.Groups)).ToList();
+                if (pool.Count == 0) pool = all.Where(r => !(NeedsFloorEntry(r) && high) && plan.LastOrDefault().Type != r).ToList();
+                pick = pool[rng.Next(pool.Count)];
+            }
+            plan.Add(new Spec(pick, rng.NextSingle() < hardChance));
             high = ExitsHigh(pick);
         }
         return plan;
@@ -120,9 +140,10 @@ public static class Procgen
 
     // ------------------------------------------------------------------ composition
 
-    static bool Gated(Room r) => r is Room.CubeCross or Room.Laser or Room.Umbrella or Room.ShelfCube or Room.FizzCube or Room.Skylight or Room.TwinBeam;
+    static bool Gated(Room r) => r is Room.CubeCross or Room.Laser or Room.Umbrella or Room.ShelfCube or Room.FizzCube or Room.Skylight or Room.TwinBeam
+        or Room.PlateCarry or Room.BankShot or Room.Clockwork or Room.GelCarry;
     static bool NeedsFloorEntry(Room r) => r is Room.Fling or Room.Laser or Room.UpFling or Room.TwinBeam;
-    static bool ExitsHigh(Room r) => r is Room.HighLedge or Room.Gel or Room.UpFling;
+    static bool ExitsHigh(Room r) => r is Room.HighLedge or Room.Gel or Room.UpFling or Room.PlateHop or Room.GelStairs;
 
     static int RoomWidth(Spec s) => s.Type switch
     {
@@ -139,6 +160,14 @@ public static class Procgen
         Room.Skylight => 22,
         Room.TwinBeam => 22,
         Room.GelIsland => 24,
+        Room.PlateHop => 22,
+        Room.PlateCarry => 26,
+        Room.Sprint => 26,
+        Room.BankShot => 28,
+        Room.Clockwork => 28,
+        Room.GridGoo => 34,
+        Room.GelStairs => 24,
+        Room.GelCarry => 24,
         _ => 20
     };
 
@@ -179,6 +208,7 @@ public static class Procgen
         var def = new LevelDef
         {
             Name = name,
+            Theme = 1 + Math.Abs(seed) % (Render.LevelArt.ThemeCount - 1),
             Map = b.Build(),
             Hints = hints ?? ctx.Hints.Distinct().Take(2).ToArray(),
             Fling = ctx.Fling,
@@ -434,6 +464,138 @@ public static class Procgen
                 c.Steps.Add(bot => Seq(bot.WalkTo(X(x0 + 2)), bot.Fire(Blue, WallL(x0 + 9, e)), bot.WalkTo(X(x0 + 14)),
                     bot.Fire(Orange, WallR(x0 + 10, r)), bot.Wait(0.6f)));
                 c.Hints.Add("Two beams, one portal pair. Line them both up.");
+                return Floor;
+            }
+            case Room.PlateHop:
+            {
+                // the orange plate throws you up and to the right: over a goo pit onto a high ledge
+                int rise = hard ? rng.Next(7, 9) : rng.Next(4, 7);
+                int top = 20 - rise;
+                int lx = x0 + 10;
+                b.Set(x0 + 3, 20, 'Q');
+                b.Fill(x0 + 5, 20, lx - 1, 21, '~');
+                b.Fill(lx, top, x0 + w - 1, Floor, 'X');
+                c.Steps.Add(bot => Seq(bot.Move(1, () => !bot.Player.OnGround), bot.Move(1, () => bot.Player.OnGround, 4)));
+                c.Hints.Add("Orange plates throw you. Step on one.");
+                return top - 1;
+            }
+            case Room.PlateCarry:
+            {
+                // bring the cube up to a button on a high shelf by riding the plate with it
+                int g = c.Group++;
+                int rise = hard ? 8 : rng.Next(6, 8);
+                int s = 20 - rise;
+                int bx = x0 + 15;
+                b.Set(x0 + 2, Floor, 'C');
+                b.Set(x0 + 5, 20, 'Q');
+                b.Fill(x0 + 12, s, x0 + 18, s + 1, 'X');
+                b.Set(bx, s - 1, World.ButtonChar(g));
+                b.Fill(x0 + 8, 20, x0 + 20, 21, '~');
+                var fwd = new Vector2(120, 0);
+                c.Steps.Add(bot => Seq(bot.Use(), bot.Move(1, () => !bot.Player.OnGround, aimRel: fwd),
+                    bot.Move(1, () => bot.Player.OnGround, 4, aimRel: fwd)));
+                c.Steps.Add(bot => Seq(bot.WalkTo(X(bx) - 36, aimRel: fwd), Lazy(() => bot.Drop(bot.Player.Pos + new Vector2(120, -2))), bot.Wait(0.5f)));
+                c.Hints.Add("The plate throws you but not the cube you carry.");
+                return Floor;
+            }
+            case Room.Sprint:
+            {
+                // orange gel makes you fast: run up, then jump a gap no normal jump can clear
+                int gap = hard ? 10 : rng.Next(8, 10);
+                int land = x0 + 8 + gap;
+                b.Fill(x0 + 1, 20, x0 + 7, 20, 'G');
+                b.Fill(x0 + 8, 20, land - 1, 21, '~');
+                c.Steps.Add(bot => Seq(bot.Move(1, () => bot.Player.Pos.X >= (x0 + 8) * T + 6, 4),
+                    bot.JumpTo(1, () => bot.Player.OnGround && bot.Player.Pos.X > land * T + 8)));
+                c.Hints.Add("Orange gel makes you fast. Run, then jump.");
+                return Floor;
+            }
+            case Room.BankShot:
+            {
+                // a falling beam, a mirror cube and a platform in the air: bank the beam into the receiver
+                int g = c.Group++;
+                int rise = hard ? 7 : 6;
+                int s = 20 - rise;
+                int px = x0 + 10, pw = 7;
+                int bm = x0 + 14;
+                b.Set(x0 + 2, Floor, 'N');
+                b.Set(x0 + 3, 20, 'Q');
+                b.Fill(px, s, px + pw - 1, s + 1, 'X');
+                b.Set(bm, 0, 'v');
+                b.Set(x0 + w, s - 1, World.ReceiverChar(g));
+                var fwd = new Vector2(120, 0);
+                c.Steps.Add(bot => Seq(bot.Use(), bot.Move(1, () => !bot.Player.OnGround, aimRel: fwd),
+                    bot.Move(1, () => bot.Player.OnGround, 4, aimRel: fwd)));
+                c.Steps.Add(bot => Seq(bot.WalkTo(X(bm) - 36, aimRel: fwd), Lazy(() => bot.Drop(bot.Player.Pos + new Vector2(120, -2))), bot.Wait(0.6f)));
+                c.Steps.Add(bot => Seq(bot.WalkTo(X(px - 2), timeout: 4), bot.Until(() => bot.Player.OnGround, 3), bot.WalkTo(X(x0 + w - 3), timeout: 10)));
+                c.Hints.Add("Cubes with a mirror bend beams. Get it into the light.");
+                return Floor;
+            }
+            case Room.Clockwork:
+            {
+                // a timed button: the door only stays open for a few seconds, so sprint for it
+                int g = c.Group++;
+                int gap = hard ? 10 : rng.Next(8, 10);
+                b.Set(x0 + 1, Floor, World.TimedButtonChar(g));
+                b.Fill(x0 + 3, 20, x0 + 9, 20, 'G');
+                b.Fill(x0 + 10, 20, x0 + 9 + gap, 21, '~');
+                int land = x0 + 10 + gap;
+                c.Steps.Add(bot => Seq(bot.Move(1, () => bot.Player.Pos.X >= (x0 + 10) * T + 6, 4),
+                    bot.JumpTo(1, () => bot.Player.OnGround && bot.Player.Pos.X > land * T + 8)));
+                c.Hints.Add("The door only stays open for a few seconds.");
+                return Floor;
+            }
+            case Room.GridGoo:
+            {
+                // a grid wipes your portals half way: use them to cross the first pit, then place new ones for the second
+                int gx = x0 + (hard ? 21 : 19);
+                int pitB = gx + 4;
+                b.Fill(x0 + 5, 20, x0 + 9, 21, '~');
+                b.Fill(x0 + 2, 20, x0 + 3, 20, '#');
+                b.Fill(x0 + 10, 0, x0 + 12, 0, '#');
+                b.Fill(gx, 1, gx, Floor, '|');
+                b.Fill(gx + 2, 20, gx + 3, 20, '#');
+                b.Fill(pitB, 20, pitB + 5, 21, '~');
+                b.Fill(pitB + 6, 0, pitB + 8, 0, '#');
+                c.Steps.Add(bot => Seq(bot.Fire(Blue, Bot.Floor(x0 + 2, 20)), bot.Fire(Orange, Ceil(x0 + 10, 0))));
+                c.Steps.Add(bot => { var tele = MarkTele(bot); return Through(bot, (x0 + 3) * T, tele, (x0 + 13) * T); });
+                c.Steps.Add(bot => bot.WalkTo(X(gx + 1)));
+                c.Steps.Add(bot => Seq(bot.Fire(Blue, Bot.Floor(gx + 2, 20)), bot.Fire(Orange, Ceil(pitB + 6, 0))));
+                c.Steps.Add(bot => { var tele = MarkTele(bot); return Through(bot, (gx + 3) * T, tele, (pitB + 7) * T); });
+                c.Hints.Add("Grids erase your portals. Plan for it.");
+                return Floor;
+            }
+            case Room.GelStairs:
+            {
+                // two gel pads, one above the other: bounce up the stairs
+                int r1 = hard ? 7 : rng.Next(5, 7);
+                int r2 = hard ? 7 : rng.Next(5, 7);
+                int s1 = 20 - r1, s2 = s1 - r2;
+                b.Fill(x0 + 3, 20, x0 + 5, 20, 'J');
+                b.Fill(x0 + 8, s1, x0 + 13, s1 + 1, 'X');
+                b.Fill(x0 + 9, s1, x0 + 11, s1, 'J');
+                b.Fill(x0 + 15, s2, x0 + w - 1, Floor, 'X');
+                c.Steps.Add(bot => Seq(bot.Move(1, () => !bot.Player.OnGround), bot.Move(1, () => bot.Player.OnGround && bot.Player.Pos.Y < (s1 + 1) * T, 4)));
+                c.Hints.Add("Bounce, then bounce again.");
+                return s2 - 1;
+            }
+            case Room.GelCarry:
+            {
+                // carry the cube while a gel pad throws you up to a button on a shelf
+                int g = c.Group++;
+                int rise = hard ? 7 : rng.Next(5, 7);
+                int s = 20 - rise;
+                int bx = x0 + 12;
+                b.Set(x0 + 2, Floor, 'C');
+                b.Fill(x0 + 4, 20, x0 + 6, 20, 'J');
+                b.Fill(x0 + 9, s, x0 + 16, s + 1, 'X');
+                b.Set(bx, s - 1, World.ButtonChar(g));
+                b.Fill(x0 + 8, 20, x0 + 17, 21, '~');
+                var fwd = new Vector2(120, 0);
+                c.Steps.Add(bot => Seq(bot.Use(), bot.Move(1, () => !bot.Player.OnGround, aimRel: fwd),
+                    bot.Move(1, () => bot.Player.OnGround && bot.Player.Pos.Y < (s + 1) * T, 4, aimRel: fwd)));
+                c.Steps.Add(bot => Seq(bot.WalkTo(X(bx) - 36, aimRel: fwd), Lazy(() => bot.Drop(bot.Player.Pos + new Vector2(120, -2))), bot.Wait(0.5f)));
+                c.Hints.Add("Cubes don't bounce while you carry them. You still do.");
                 return Floor;
             }
             case Room.GelIsland:

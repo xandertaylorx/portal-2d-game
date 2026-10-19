@@ -25,7 +25,7 @@ public sealed class LevelArt
                 PaintTile(w, tx, ty);
     }
 
-    static bool StaticSolid(char c) => c is '#' or 'X' or '<' or '>' or '^' or 'v' or 'J' || World.IsReceiver(c);
+    static bool StaticSolid(char c) => c is '#' or 'X' or '<' or '>' or '^' or 'v' or 'J' or 'Q' or 'q' or 'G' || World.IsReceiver(c);
     static bool Mass(World w, int x, int y) => x < 0 || y < 0 || x >= w.W || y >= h(w) || StaticSolid(w.At(x, y));
     static int h(World w) => w.H;
 
@@ -149,7 +149,26 @@ public sealed class LevelArt
             }
         for (int i = 0; i < shadow.Length; i++)
             if (shadow[i]) b.Shade(i % b.W, i / b.W, 0.4f);
+
+        // each chamber family has its own colour grade so the wall doesn't look the same every time
+        if (w.Def.Theme > 0 && w.Def.Theme < Themes.Length)
+        {
+            var tint = Themes[w.Def.Theme];
+            b.BlendRect(0, 0, b.W, b.H, tint);
+        }
     }
+
+    static readonly Color[] Themes =
+    [
+        default,
+        C(30, 190, 180, 46),   // teal
+        C(150, 90, 230, 52),   // violet
+        C(235, 150, 40, 44),   // amber
+        C(60, 200, 100, 44),   // green
+        C(235, 60, 70, 46),    // crimson
+        C(110, 170, 255, 56),  // ice
+    ];
+    public const int ThemeCount = 7;
 
     static bool IsShadowCaster(char c) => StaticSolid(c) || World.IsDoor(c);
 
@@ -166,6 +185,8 @@ public sealed class LevelArt
             case '<' or '>' or '^' or 'v': Metal(w, tx, ty); Emitter(tx, ty, c); break;
             case var rc when World.IsReceiver(rc): Metal(w, tx, ty); Receiver(tx, ty); break;
             case 'J': Metal(w, tx, ty); Gel(w, tx, ty); break;
+            case 'G': Metal(w, tx, ty); Gel(w, tx, ty, PP.SpeedGel, C(255, 214, 150), C(180, 70, 10), C(120, 40, 5), true); break;
+            case 'Q' or 'q': Metal(w, tx, ty); Plate(tx, ty, c == 'Q'); break;
         }
     }
 
@@ -297,16 +318,41 @@ public sealed class LevelArt
             }
     }
 
-    void Gel(World w, int tx, int ty)
+    void Gel(World w, int tx, int ty) => Gel(w, tx, ty, PP.Gel, C(166, 220, 255), C(28, 95, 184), C(20, 60, 120), false);
+
+    void Gel(World w, int tx, int ty, Color body, Color hi, Color lo, Color outline, bool streaks)
     {
         if (Mass(w, tx, ty - 1)) return;
         var f = Front;
         int ox = tx * P, oy = ty * P;
-        f.Rect(ox, oy, P, 6, PP.Gel);
-        f.HLine(ox, oy, P, C(20, 60, 120));
-        f.HLine(ox, oy + 1, P, C(166, 220, 255));
-        f.HLine(ox, oy + 5, P, C(28, 95, 184));
-        for (int x = 0; x < P; x += 5) f.Set(ox + x + (tx % 3), oy + 3, C(220, 242, 255));
+        f.Rect(ox, oy, P, 6, body);
+        f.HLine(ox, oy, P, outline);
+        f.HLine(ox, oy + 1, P, hi);
+        f.HLine(ox, oy + 5, P, lo);
+        if (streaks)
+            for (int x = 0; x < P; x += 4) { f.Set(ox + x + 1, oy + 3, hi); f.Set(ox + x + 2, oy + 3, hi); f.Set(ox + x + 3, oy + 2, hi); }
+        else
+            for (int x = 0; x < P; x += 5) f.Set(ox + x + (tx % 3), oy + 3, C(220, 242, 255));
+    }
+
+    /// <summary>Launch plate: an orange pad with a chevron pointing up and to the side it throws you.</summary>
+    void Plate(int tx, int ty, bool right)
+    {
+        var f = Front;
+        int ox = tx * P, oy = ty * P;
+        var pad = C(255, 150, 40); var padHi = C(255, 215, 130); var padLo = C(170, 80, 10);
+        f.Rect(ox, oy, P, 5, pad);
+        f.HLine(ox, oy, P, C(90, 40, 5));
+        f.HLine(ox, oy + 1, P, padHi);
+        f.HLine(ox, oy + 4, P, padLo);
+        int dx = right ? 1 : -1;
+        int cx = ox + (right ? 4 : P - 5);
+        for (int i = 0; i < 4; i++)
+        {
+            f.Set(cx + dx * i * 2, oy + 7 - i, C(255, 214, 150));
+            f.Set(cx + dx * i * 2 + dx, oy + 7 - i, C(255, 214, 150));
+            f.Set(cx + dx * i * 2, oy + 8 - i, C(255, 160, 50));
+        }
     }
 
     // ------------------------------------------------------------ textures

@@ -104,11 +104,12 @@ public sealed class Bot
     }
 
     /// <summary>Hold a direction until a condition holds.</summary>
-    public IEnumerable<InputState> Move(int dir, Func<bool> until, float timeout = 8)
+    public IEnumerable<InputState> Move(int dir, Func<bool> until, float timeout = 8, Vector2? aimRel = null)
     {
         float t = 0;
         while (!until() && t < timeout && !P.Dead)
         {
+            if (aimRel is { } ar) Aim = P.Pos + ar;
             yield return In(dir);
             t += Frame;
         }
@@ -128,11 +129,12 @@ public sealed class Bot
         }
     }
 
-    public IEnumerable<InputState> Until(Func<bool> cond, float timeout = 6, int mx = 0)
+    public IEnumerable<InputState> Until(Func<bool> cond, float timeout = 6, int mx = 0, Vector2? aimRel = null)
     {
         float t = 0;
         while (!cond() && t < timeout && !P.Dead)
         {
+            if (aimRel is { } ar) Aim = P.Pos + ar;
             yield return In(mx);
             t += Frame;
         }
@@ -142,6 +144,12 @@ public sealed class Bot
     {
         a();
         yield break;
+    }
+
+    /// <summary>Build a step only when it is reached, so it can read where the player has got to.</summary>
+    public static IEnumerable<InputState> Lazy(Func<IEnumerable<InputState>> build)
+    {
+        foreach (var i in build()) yield return i;
     }
 
     public static IEnumerable<InputState> Seq(params IEnumerable<InputState>[] parts)

@@ -47,6 +47,8 @@ public sealed class Cube : Body
     public float RespawnT;
     public bool Gone;
     public float OnButtonGlow;
+    /// <summary>0 = plain cube, +1 = '/' mirror, -1 = '\' mirror (reflects laser beams).</summary>
+    public int Mirror;
 
     public Cube(Vector2 spawn)
     {
@@ -61,7 +63,8 @@ public sealed class Cube : Body
 public sealed class FloorButton
 {
     public int X, Y, Group;
-    public bool Pressed;
+    public bool Pressed, Timed;
+    public float HoldT;
     public float Press; // animated 0..1
     public Rectangle Trigger => new(X * K.Tile - 10, Y * K.Tile + K.Tile - 12, K.Tile + 20, 12);
 }
