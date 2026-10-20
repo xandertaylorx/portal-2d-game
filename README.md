@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.4.0-ff8a1f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-2.5.0-ff8a1f?style=flat-square">
   <img alt=".NET" src="https://img.shields.io/badge/.NET-10-3fa7ff?style=flat-square">
   <img alt="platforms" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-5ee08a?style=flat-square">
   <img alt="license" src="https://img.shields.io/badge/license-PolyForm%20Strict-d97757?style=flat-square">
@@ -32,9 +32,9 @@
 
 - **50 chambers** that teach and then combine: momentum flings, weighted cubes and buttons, toxic goo,
   emancipation grids, lasers and receivers, glass, blue repulsion gel, launch plates, orange speed gel, timed
-  buttons and mirror cubes. Chambers 1-21 are fully handcrafted.
-  Chambers 22-50 are authored sequences of verified puzzle rooms that grow from two rooms to five, with "hard" room
-  variants mixed in, ending in an eight-room Final Exam.
+  buttons and mirror cubes. Chambers 1-40 are fully handcrafted, each with its own layout and its own trick
+  (shooting portals through a window, a cube as a step stool, a sealed cell, a speed loop, a no-gun level...).
+  Chambers 41-50 combine verified puzzle rooms into longer runs, ending in a nine-room Final Exam.
 - **Random Test mode**: endless chambers assembled from randomised puzzle rooms. Each run gets harder, and the game
   tracks your best streak.
 - **Portal lenses**: a fragment shader turns each linked portal into a fish-eye window onto the other side, with

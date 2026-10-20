@@ -2,6 +2,20 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.5.0] - 2026-10-20
+
+### Added
+- **19 brand-new handcrafted chambers (22-40)**, each with its own layout and its own trick: shooting portals
+  through a window, using a cube as a step stool, throwing a cube with a launch plate, a sealed-cell jailbreak,
+  a level with no portal gun, a fall-speed loop, timed-button runs, rooftop platforming and more.
+- **Seven new room types in Random Test** (window shots, stool, catapult, moat, grid crossing, penthouse,
+  spotlight). It now draws from 28 room types.
+
+### Changed
+- Chambers 22-40 are no longer built from repeated room templates. Chambers 41-50 are longer runs that mix the new
+  rooms in, ending in a nine-room Final Exam.
+- Best times for chambers 22-50 start fresh, because the chambers have new names.
+
 ## [2.4.0] - 2026-10-19
 
 ### Added

@@ -20,6 +20,7 @@ public static class Procgen
     const int H = 22, Floor = 19;
     const int T = K.Tile;
     const PortalColor Blue = PortalColor.Blue, Orange = PortalColor.Orange;
+    static readonly Vector2 Fwd = new(120, 0), Back = new(-120, 0);
 
     public sealed class Result
     {
@@ -35,7 +36,8 @@ public static class Procgen
     {
         CeilCross, HighLedge, CubeCross, Fling, Laser, Umbrella, Gel,
         ShelfCube, FizzCube, UpFling, Skylight, TwinBeam, GelIsland,
-        PlateHop, PlateCarry, Sprint, BankShot, Clockwork, GridGoo, GelStairs, GelCarry
+        PlateHop, PlateCarry, Sprint, BankShot, Clockwork, GridGoo, GelStairs, GelCarry,
+        Peephole, Stool, Catapult, Moat, Fizzler, Penthouse, Spotlight
     }
 
     public readonly record struct Spec(Room Type, bool Hard = false);
@@ -92,8 +94,10 @@ public static class Procgen
         Room.GelIsland or Room.PlateHop or Room.Sprint or Room.ShelfCube or Room.CubeCross or Room.FizzCube
             or Room.Umbrella or Room.Laser => 2,
         Room.Skylight or Room.Gel or Room.Fling or Room.TwinBeam or Room.PlateCarry or Room.Clockwork
-            or Room.GridGoo or Room.GelStairs or Room.GelCarry => 3,
-        _ => 4 // UpFling, BankShot
+            or Room.GridGoo or Room.GelStairs or Room.GelCarry or Room.Peephole or Room.Catapult or Room.Moat
+            or Room.Fizzler or Room.Spotlight => 3,
+        Room.Stool => 2,
+        _ => 4 // UpFling, BankShot, Penthouse
     };
 
     static List<Spec> RandomPlan(Random rng, int difficulty)
@@ -141,9 +145,10 @@ public static class Procgen
     // ------------------------------------------------------------------ composition
 
     static bool Gated(Room r) => r is Room.CubeCross or Room.Laser or Room.Umbrella or Room.ShelfCube or Room.FizzCube or Room.Skylight or Room.TwinBeam
-        or Room.PlateCarry or Room.BankShot or Room.Clockwork or Room.GelCarry;
-    static bool NeedsFloorEntry(Room r) => r is Room.Fling or Room.Laser or Room.UpFling or Room.TwinBeam;
-    static bool ExitsHigh(Room r) => r is Room.HighLedge or Room.Gel or Room.UpFling or Room.PlateHop or Room.GelStairs;
+        or Room.PlateCarry or Room.BankShot or Room.Clockwork or Room.GelCarry or Room.Catapult or Room.Moat
+        or Room.Fizzler or Room.Penthouse or Room.Spotlight;
+    static bool NeedsFloorEntry(Room r) => r is Room.Fling or Room.Laser or Room.UpFling or Room.TwinBeam or Room.Spotlight;
+    static bool ExitsHigh(Room r) => r is Room.HighLedge or Room.Gel or Room.UpFling or Room.PlateHop or Room.GelStairs or Room.Stool;
 
     static int RoomWidth(Spec s) => s.Type switch
     {
@@ -168,6 +173,13 @@ public static class Procgen
         Room.GridGoo => 34,
         Room.GelStairs => 24,
         Room.GelCarry => 24,
+        Room.Peephole => 26,
+        Room.Stool => 20,
+        Room.Catapult => 24,
+        Room.Moat => 35,
+        Room.Fizzler => 37,
+        Room.Penthouse => 30,
+        Room.Spotlight => 24,
         _ => 20
     };
 
@@ -596,6 +608,118 @@ public static class Procgen
                     bot.Move(1, () => bot.Player.OnGround && bot.Player.Pos.Y < (s + 1) * T, 4, aimRel: fwd)));
                 c.Steps.Add(bot => Seq(bot.WalkTo(X(bx) - 36, aimRel: fwd), Lazy(() => bot.Drop(bot.Player.Pos + new Vector2(120, -2))), bot.Wait(0.5f)));
                 c.Hints.Add("Cubes don't bounce while you carry them. You still do.");
+                return Floor;
+            }
+            case Room.Peephole:
+            {
+                // the far side of the wall is only visible through the window
+                int wx = x0 + 14;
+                b.Fill(wx, 1, wx + 2, Floor, 'X').Fill(wx, 3, wx + 2, 8, ' ');
+                b.Fill(x0 + 1, 20, x0 + 2, 20, '#');
+                b.Fill(x0 + 19, 0, x0 + w - 1, 0, '#');
+                if (hard) b.Fill(x0 + 23, 17, x0 + 23, Floor, 'X');
+                c.Steps.Add(bot => Seq(bot.WalkTo(X(x0 + 4)), bot.Fire(Blue, Bot.Floor(x0 + 1, 20)), bot.Fire(Orange, Ceil(x0 + 20, 0))));
+                c.Steps.Add(bot => { var tele = MarkTele(bot); return Through(bot, (x0 + 2) * T, tele); });
+                c.Hints.Add("Portal shots fly through the window. You can't.");
+                return Floor;
+            }
+            case Room.Stool:
+            {
+                // the ledge is one jump too high: stand on the cube
+                int lx = x0 + 12;
+                b.Fill(lx, 16, x0 + w - 1, Floor, 'X');
+                b.Set(x0 + 3, Floor, 'C');
+                c.Steps.Add(bot => Seq(bot.WalkTo(X(x0 + 3) - 26), bot.Use(), bot.WalkTo(lx * T - 74, aimRel: Fwd), bot.Use(), bot.Wait(0.6f),
+                    bot.JumpTo(1, () => bot.Player.OnGround && bot.Player.Pos.Y < 610),
+                    bot.JumpTo(1, () => bot.Player.OnGround && bot.Player.Pos.X > (lx + 1) * T)));
+                c.Hints.Add("A cube makes a decent step.");
+                return 15;
+            }
+            case Room.Catapult:
+            {
+                // the button is out of reach: throw a cube onto it with a launch plate
+                int g = c.Group++;
+                int a = x0 + 9;
+                b.Set(a, 20, 'Q');
+                b.Fill(a + 7, 12, x0 + w - 1, 13, 'X');
+                b.Set(a + 9, 11, World.ButtonChar(g));
+                b.Set(x0 + 3, Floor, 'C');
+                c.Steps.Add(bot => Seq(bot.WalkTo(X(x0 + 3) - 26), bot.Use(), bot.WalkTo(a * T - 22, aimRel: Fwd), bot.Use(), bot.Wait(1.5f),
+                    bot.JumpTo(1, () => bot.Player.OnGround && bot.Player.Pos.X > (a + 2) * T)));
+                c.Hints.Add("Launch plates throw cubes, too.");
+                return Floor;
+            }
+            case Room.Moat:
+            {
+                // the cube is on an island: fetch it, bring it back
+                int g = c.Group++;
+                b.Fill(x0 + 9, 20, x0 + 29, 21, '~').Fill(x0 + 17, 20, x0 + 21, 20, '#').Fill(x0 + 3, 20, x0 + 4, 20, '#');
+                b.Fill(x0 + 15, 0, x0 + 20, 0, '#').Fill(x0 + 29, 0, x0 + 34, 0, '#');
+                b.Set(x0 + 32, Floor, World.ButtonChar(g)).Set(x0 + 19, Floor, 'C');
+                c.Steps.Add(bot => Seq(bot.Fire(Blue, Bot.Floor(x0 + 3, 20)), bot.Fire(Orange, Ceil(x0 + 17, 0))));
+                c.Steps.Add(bot => { var tele = MarkTele(bot); return Through(bot, (x0 + 4) * T, tele); });
+                c.Steps.Add(bot => Seq(bot.WalkTo(X(x0 + 19) - 40), bot.Use(), bot.WalkTo(X(x0 + 20), aimRel: Fwd),
+                    bot.Fire(Blue, Bot.Floor(x0 + 19, 20)), bot.Fire(Orange, Ceil(x0 + 30, 0))));
+                c.Steps.Add(bot =>
+                {
+                    var tele = MarkTele(bot);
+                    return Seq(bot.WalkTo((x0 + 20) * T - 4, stopIf: tele, aimRel: Fwd), bot.Until(tele), bot.Until(() => bot.Player.OnGround, 4),
+                        bot.WalkTo(X(x0 + 34)), bot.Drop(new Vector2((x0 + 30) * T, 700)), bot.Wait(0.5f));
+                });
+                c.Hints.Add("Fetch the cube from the island. Bring it back.");
+                return Floor;
+            }
+            case Room.Fizzler:
+            {
+                // the cube goes over the grid and the goo by portal
+                int g = c.Group++;
+                b.Fill(x0, 20, x0 + 1, 20, '#').Fill(x0 + 6, 20, x0 + 10, 21, '~').Fill(x0 + 12, 0, x0 + 14, 0, '#');
+                b.Fill(x0 + 14, 20, x0 + 15, 20, '#');
+                b.Fill(x0 + 17, 1, x0 + 17, Floor, '|');
+                b.Fill(x0 + 19, 20, x0 + 29, 21, '~').Fill(x0 + 31, 0, x0 + 34, 0, '#');
+                b.Set(x0 + 34, Floor, World.ButtonChar(g)).Set(x0 + 4, Floor, 'C');
+                c.Steps.Add(bot => Seq(bot.WalkTo(X(x0 + 3)), bot.Use(), bot.Fire(Blue, Bot.Floor(x0, 20)), bot.Fire(Orange, Ceil(x0 + 12, 0))));
+                c.Steps.Add(bot => { var tele = MarkTele(bot); return Through(bot, (x0 + 1) * T, tele, (x0 + 13) * T + 16); });
+                c.Steps.Add(bot => Seq(bot.WalkTo((x0 + 13) * T, aimRel: Fwd),
+                    bot.Fire(Blue, Bot.Floor(x0 + 14, 20)), bot.Fire(Orange, Ceil(x0 + 31, 0))));
+                c.Steps.Add(bot =>
+                {
+                    var tele = MarkTele(bot);
+                    return Seq(Through(bot, (x0 + 15) * T, tele, (x0 + 33) * T),
+                        bot.WalkTo(X(x0 + 36), aimRel: Fwd), Lazy(() => bot.Drop(bot.Player.Pos + new Vector2(-100, 30))), bot.Wait(0.6f));
+                });
+                c.Hints.Add("The grid eats cubes. You can shoot through it.");
+                return Floor;
+            }
+            case Room.Penthouse:
+            {
+                // go up through the hole by portal, send the cube down it, put it on the button
+                int g = c.Group++;
+                b.Fill(x0, 13, x0 + w - 1, 14, 'X').Fill(x0 + 7, 13, x0 + 10, 14, ' ');
+                b.Fill(x0 + 2, 20, x0 + 3, 20, '#').Fill(x0 + 15, 0, x0 + 16, 0, '#');
+                b.Set(x0 + 23, 12, 'C').Set(x0 + 27, Floor, World.ButtonChar(g));
+                c.Steps.Add(bot => Seq(bot.WalkTo((x0 + 7) * T + 14), bot.Fire(Orange, Ceil(x0 + 15, 0)), bot.Fire(Blue, Bot.Floor(x0 + 2, 20))));
+                c.Steps.Add(bot => { var tele = MarkTele(bot); return Through(bot, (x0 + 3) * T, tele); });
+                c.Steps.Add(bot => Seq(bot.WalkTo(X(x0 + 23) - 40), bot.Use(), bot.WalkTo((x0 + 11) * T + 20, aimRel: Back), bot.Use(), bot.Wait(0.8f),
+                    bot.WalkTo(X(x0 + 9)), bot.Until(() => bot.Player.OnGround && bot.Player.Pos.Y > 15 * T, 3),
+                    bot.WalkTo(X(x0 + 10)), bot.Use(), bot.WalkTo(X(x0 + 25), aimRel: Fwd),
+                    bot.Drop(new Vector2((x0 + 28) * T, 700)), bot.Wait(0.6f)));
+                c.Hints.Add("The ceiling upstairs is out of reach, not out of sight.");
+                return Floor;
+            }
+            case Room.Spotlight:
+            {
+                // the beam is on this side of the wall, the receiver on the other: put the portals through the window
+                int g = c.Group++;
+                int wx = x0 + 12;
+                int e = FreeRows(b, x0 - 1, 12, 10, 13, 1);
+                b.Set(x0 - 1, e, '>');
+                b.Fill(wx, 1, wx + 2, Floor, 'X').Fill(wx, 3, wx + 2, 8, ' ').Fill(wx, e - 1, wx, e, '#');
+                b.Fill(wx, Floor - 3, wx + 2, Floor, World.DoorChar(g));
+                b.Fill(x0 + 15, 0, x0 + w - 1, 0, '#');
+                b.Set(x0 + 17, 6, World.ReceiverChar(g));
+                c.Steps.Add(bot => Seq(bot.Fire(Orange, Ceil(x0 + 17, 0)), bot.Fire(Blue, WallL(wx, e - 1)), bot.Wait(1.2f)));
+                c.Hints.Add("Aim through the window. The beam goes where the portals send it.");
                 return Floor;
             }
             case Room.GelIsland:

@@ -37,9 +37,11 @@ If the tests fail, don't release: fix the problem or tell the user.
 ## Working on levels
 
 - Handcrafted chambers 1-21: `Game/Levels.cs`. Each needs a reference solution in `Testing/Solutions.cs` (same index).
-- Chambers 22-50: `Levels.AddComposed`, each a fixed list of `Procgen` rooms plus a seed. Their solutions are
+- Chambers 22-40: handcrafted in `Game/Chambers.cs`, each carries its own bot `Solution`. The list at the end of
+  `Chambers.Add` sets the order and must name every chamber.
+- Chambers 41-50: `Levels.AddComposed`, each a fixed list of `Procgen` rooms plus a seed. Their solutions are
   generated with the rooms. If one fails `--test`, change its seed or rooms. Rooms that need a floor-level entrance
-  (Fling, Laser, UpFling, TwinBeam) can't follow rooms that exit high (HighLedge, Gel, UpFling).
+  (Fling, Laser, UpFling, TwinBeam, Spotlight) can't follow rooms that exit high (HighLedge, Gel, UpFling, Stool).
 - `--test` must pass for all chambers, and `--procdiag` checks every room type. Best times are saved by chamber **name**, so renaming a chamber resets its
   best time.
 - Random Test rooms: `Game/Procgen.cs`. Each room archetype must emit its own bot solution.
