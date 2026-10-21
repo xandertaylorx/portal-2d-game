@@ -194,6 +194,10 @@ public sealed class Renderer
         Raylib.DrawTexturePro(a.BackTex, new Rectangle(0, 0, a.Back.W, a.Back.H), full, Vector2.Zero, 0, Color.White);
         DrawLamps(w, view);
         if (w.HasExit) DrawExit(w);
+        // doors sit behind the player and cubes, so the open gap never covers them
+        for (int y = Math.Max(0, (int)(view.Y / T)); y <= Math.Min(w.H - 1, (int)((view.Y + view.Height) / T)); y++)
+            for (int x = Math.Max(0, (int)(view.X / T)); x <= Math.Min(w.W - 1, (int)((view.X + view.Width) / T)); x++)
+                if (World.IsDoor(w.Tiles[x, y])) DrawDoor(w, x, y, w.Tiles[x, y] - 'a');
         foreach (var b in w.Buttons) DrawButton(b);
         foreach (var c in w.Cubes) DrawWithClones(w, c, () => DrawCube(c));
         if (w.Player is { } pl) DrawWithClones(w, pl, () => DrawPlayer(pl));
@@ -207,7 +211,6 @@ public sealed class Renderer
                 char c = w.Tiles[x, y];
                 if (c == '~') DrawGoo(w, x, y);
                 else if (c == '|') DrawFizzler(w, x, y);
-                else if (World.IsDoor(c)) DrawDoor(w, x, y, c - 'a');
             }
         if (w.HasExit) DrawExitSign(w);
         foreach (var r in w.Receivers) DrawReceiverGlow(r);

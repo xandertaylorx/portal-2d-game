@@ -386,15 +386,21 @@ public sealed class App
         };
     }
 
+    bool pendJump, pendUse, pendBlue, pendOrange;
+
     void Step(World w, float dt, InputState input, bool silent)
     {
         accumulator += dt;
+        // one-frame presses are latched until a sim step consumes them, so frames that run no step don't swallow a jump
+        pendJump |= input.JumpPressed; pendUse |= input.UsePressed; pendBlue |= input.FireBlue; pendOrange |= input.FireOrange;
         bool first = true;
         int guard = 0;
         while (accumulator >= K.SimDt && guard++ < 10)
         {
             var i = input;
-            if (!first) { i.JumpPressed = false; i.UsePressed = false; i.FireBlue = false; i.FireOrange = false; }
+            i.JumpPressed = first && pendJump; i.UsePressed = first && pendUse;
+            i.FireBlue = first && pendBlue; i.FireOrange = first && pendOrange;
+            if (first) pendJump = pendUse = pendBlue = pendOrange = false;
             w.Update(K.SimDt, i);
             first = false;
             accumulator -= K.SimDt;

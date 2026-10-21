@@ -2,6 +2,15 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.6.1] - 2026-10-21
+
+### Fixed
+- Jumping (and picking up, and firing portals) no longer gets randomly ignored. A quick key press could
+  fall between game updates and vanish, so you'd run and jump without jumping.
+- Your character no longer keeps drifting forward in mid-air after you let go of the move keys. Speed from
+  gels and launch plates still carries you as before.
+- Open doors no longer cover you: the dark door frame is now drawn behind the player and cubes.
+
 ## [2.6.0] - 2026-10-21
 
 ### Added

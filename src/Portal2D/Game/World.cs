@@ -337,7 +337,7 @@ public sealed class World
         else
         {
             if (dir != 0) { if (p.Vel.X * dir < MaxWalk) p.Vel.X = MathX.Approach(p.Vel.X, dir * MaxWalk, 1500 * dt); }
-            else p.Vel.X = MathX.Approach(p.Vel.X, 0, 120 * dt);
+            else p.Vel.X = MathX.Approach(p.Vel.X, 0, (MathF.Abs(p.Vel.X) <= MaxWalk * 1.05f ? 1600 : 120) * dt);
         }
         p.Vel.Y = MathF.Min(p.Vel.Y + Gravity * dt, MaxFall);
 
