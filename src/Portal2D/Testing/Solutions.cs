@@ -96,7 +96,7 @@ public static class TestRunner
     /// <summary>Plays every chamber headlessly with its reference solution. Returns process exit code.</summary>
     public static int Run(bool verbose, int only = -1)
     {
-        int failures = CheckPortalMath();
+        int failures = CheckPortalMath() + MapTests.Run();
         for (int i = 0; i < Levels.All.Length; i++)
         {
             if (only >= 0 && i != only) continue;

@@ -27,6 +27,7 @@ public sealed class SaveData
     public int RandomBestStreak { get; set; }
     public int RandomCleared { get; set; }
     public bool CheckUpdates { get; set; } = true;
+    public bool EditorHelpSeen { get; set; }
     public int Schema { get; set; }
 
     static string FilePath => Path.Combine(

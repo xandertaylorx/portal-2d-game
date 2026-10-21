@@ -650,7 +650,7 @@ public sealed class World
 
     // ---------------------------------------------------------------- lasers, groups, hazards
 
-    void ComputeLasers()
+    public void ComputeLasers()
     {
         Lasers.Clear();
         LaserImpacts.Clear();

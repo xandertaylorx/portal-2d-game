@@ -2,6 +2,21 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.6.0] - 2026-10-21
+
+### Added
+- **Map builder.** A new **MAP BUILDER** button on the main menu lets you design your own chambers. Pick a tool,
+  click to place it, right click to erase. You get walls, glass, goo, emancipation grids, gels, launch plates,
+  cubes, mirror cubes, buttons, timed buttons, doors, lasers and laser targets, plus a draw / box / fill brush.
+- Doors, buttons and laser targets are wired together by **colour and number**, with coloured badges and link
+  lines on the map so you can see what opens what. The editor warns you about doors nobody can open.
+- **Test play** a map from the editor and beat it to mark it as beaten. Undo and redo, resize the map, pick a
+  wall style and choose the portal gun (none, blue only, or both) from MAP OPTIONS.
+- Maps **save on your device automatically**. **My Maps** shows a thumbnail, your best time and PLAY, EDIT, SHARE
+  and DELETE for each one.
+- **Share maps with friends**: SHARE copies a short code, and PASTE MAP CODE adds a friend's map. OPEN MAPS FOLDER
+  shows the map files.
+
 ## [2.5.0] - 2026-10-20
 
 ### Added

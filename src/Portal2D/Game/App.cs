@@ -8,7 +8,7 @@ namespace Portal2D.Game;
 
 public sealed class App
 {
-    enum Screen { Menu, Select, Options, Controls, Play, Complete, Ending }
+    enum Screen { Menu, Select, Options, Controls, Play, Complete, Ending, MyMaps, Editor }
 
     Screen screen = Screen.Menu;
     readonly SaveData save = SaveData.Load(Levels.All.Select(l => l.Name).ToArray());
@@ -23,7 +23,12 @@ public sealed class App
     Procgen.Result? random;
     int randomSeed, streak;
     int selPage = -1;
-    LevelDef CurrentDef => randomMode ? random!.Def : Levels.All[level];
+    // map builder
+    readonly MapLibrary library = new();
+    MapEditor? editor;
+    bool customMode, fromEditor;
+    CustomMap? customMap;
+    LevelDef CurrentDef => customMode ? customMap!.ToDef() : randomMode ? random!.Def : Levels.All[level];
 
     Camera2D cam;
     Vector2 camPos;
@@ -57,6 +62,7 @@ public sealed class App
         Rlgl.DisableBackfaceCulling();
 
         UI.Load();
+        library.Reload();
         Sprites.Upload();
         audio.Load();
         audio.Master = save.Master; audio.SfxVolume = save.Sfx; audio.AmbienceVolume = save.Ambience;
@@ -107,6 +113,25 @@ public sealed class App
             screen = Screen.Play;
         }
         else if (what == "select") screen = Screen.Select;
+        else if (what == "editor" || what == "editorhelp")
+        {
+            var demo = new CustomMap { Name = "TWO WEIGHTS", Map = Levels.All[12].Map };
+            demo.Sanitize();
+            editor = new MapEditor(CustomMap.Blank("DEMO")) { Persist = false, ShowHelp = what == "editorhelp" };
+            if (what == "editor") editor.Demo();
+            screen = Screen.Editor;
+        }
+        else if (what == "mymaps")
+        {
+            library.Maps = new List<CustomMap>();
+            foreach (int li in new[] { 12, 4, 17 })
+            {
+                var dm = new CustomMap { Name = Levels.All[li].Name.ToUpperInvariant(), Map = Levels.All[li].Map, Verified = li != 4, Best = li != 4 ? 41.5f : 0 };
+                dm.Sanitize();
+                library.Maps.Add(dm);
+            }
+            screen = Screen.MyMaps;
+        }
         else if (what == "options") screen = Screen.Options;
         else if (what == "controls") screen = Screen.Controls;
         else if (what == "complete") { level = 3; LoadLevel(true); screen = Screen.Complete; levelTime = 23.4f; }
@@ -209,7 +234,61 @@ public sealed class App
         fadeDir = 1;
     }
 
-    void SetScreen(Screen s) { screen = s; stateT = 0; paused = false; }
+    void SetScreen(Screen s)
+    {
+        if (screen == Screen.MyMaps && s != Screen.MyMaps) library.FreeThumbs();
+        screen = s; stateT = 0; paused = false;
+    }
+
+    // ================================================================ map builder flow
+
+    void OpenMyMaps()
+    {
+        editor = null;
+        library.Reload();
+        SetScreen(Screen.MyMaps);
+    }
+
+    void NewMap()
+    {
+        var names = library.Maps.Select(m => m.Name).ToHashSet();
+        int n = 1;
+        while (names.Contains($"MY CHAMBER {n}")) n++;
+        var map = CustomMap.Blank($"MY CHAMBER {n}");
+        CustomMaps.Save(map);
+        library.Maps.Insert(0, map);
+        OpenEditor(map);
+    }
+
+    void OpenEditor(CustomMap map)
+    {
+        editor = new MapEditor(map) { ShowHelp = !save.EditorHelpSeen };
+        if (!save.EditorHelpSeen) { save.EditorHelpSeen = true; save.Store(); }
+        SetScreen(Screen.Editor);
+        camPos = editor.CamTarget;
+        UpdateCam(0);
+    }
+
+    void PlayCustom(CustomMap map, bool testing)
+    {
+        customMode = true; randomMode = false; customMap = map; fromEditor = testing;
+        LoadLevel(true);
+        SetScreen(Screen.Play);
+    }
+
+    /// <summary>Leave a custom map: back to the editor if it was a test, otherwise to the map list.</summary>
+    void ExitCustom()
+    {
+        Go(() =>
+        {
+            if (fromEditor && editor != null)
+            {
+                SetScreen(Screen.Editor);
+                editor.AfterTest();
+            }
+            else OpenMyMaps();
+        });
+    }
 
     // ================================================================ update
 
@@ -223,12 +302,22 @@ public sealed class App
             cursorHidden = wantHidden;
         }
 
+        if (screen == Screen.Editor && editor != null)
+        {
+            editor.Update(dt, cam, fadeAction == null);
+            camPos = editor.CamTarget;
+            UpdateCam(dt);
+            if (editor.WantExit) { editor.WantExit = false; Go(OpenMyMaps); }
+            if (editor.WantTest) { editor.WantTest = false; var tm = editor.Map; Go(() => PlayCustom(tm, true)); }
+            return;
+        }
+
         if (!playing)
         {
             Step(menuWorld, dt, default, silent: true);
             camPos = new Vector2(menuWorld.WidthPx / 2 + MathF.Sin(time * 0.15f) * 10, menuWorld.HeightPx / 2);
             UpdateCam(dt);
-            if (Raylib.IsKeyPressed(KeyboardKey.Escape) && screen != Screen.Menu) Go(() => SetScreen(Screen.Menu));
+            if (Raylib.IsKeyPressed(KeyboardKey.Escape) && screen != Screen.Menu && !(screen == Screen.MyMaps && library.CancelModal())) Go(() => SetScreen(Screen.Menu));
             return;
         }
 
@@ -274,7 +363,7 @@ public sealed class App
         {
             Step(w, dt, default, silent: true);
             if (Raylib.IsKeyPressed(KeyboardKey.Enter) || Raylib.IsKeyPressed(KeyboardKey.KpEnter)) NextLevel();
-            if (Raylib.IsKeyPressed(KeyboardKey.Escape)) Go(() => SetScreen(Screen.Menu));
+            if (Raylib.IsKeyPressed(KeyboardKey.Escape)) { if (customMode) ExitCustom(); else Go(() => SetScreen(Screen.Menu)); }
         }
         FollowPlayer(dt, false);
         UpdateCam(dt);
@@ -352,7 +441,7 @@ public sealed class App
 
     void StartLevel(int idx)
     {
-        Go(() => { randomMode = false; level = idx; LoadLevel(true); SetScreen(Screen.Play); });
+        Go(() => { randomMode = false; customMode = false; level = idx; LoadLevel(true); SetScreen(Screen.Play); });
     }
 
     void StartRandom(int seed, bool newRun)
@@ -361,6 +450,7 @@ public sealed class App
         {
             if (newRun) streak = 0;
             randomMode = true;
+            customMode = false;
             randomSeed = seed;
             random = Procgen.Generate(seed, streak);
             LoadLevel(true);
@@ -392,6 +482,14 @@ public sealed class App
             save.RandomBestStreak = Math.Max(save.RandomBestStreak, streak);
             newBest = false;
         }
+        else if (customMode)
+        {
+            var cm = customMap!;
+            newBest = cm.Best <= 0 || levelTime < cm.Best;
+            if (newBest) cm.Best = levelTime;
+            cm.Verified = true;
+            CustomMaps.Save(cm);
+        }
         else
         {
             float best = save.Best[level];
@@ -404,7 +502,8 @@ public sealed class App
 
     void NextLevel()
     {
-        if (randomMode) StartRandom(randomSeed + 7919, newRun: false);
+        if (customMode) ExitCustom();
+        else if (randomMode) StartRandom(randomSeed + 7919, newRun: false);
         else if (level + 1 >= Levels.All.Length) Go(() => SetScreen(Screen.Ending));
         else StartLevel(level + 1);
     }
@@ -426,8 +525,8 @@ public sealed class App
     void Draw()
     {
         bool playing = screen is Screen.Play or Screen.Complete && world != null;
-        var shown = playing ? world! : menuWorld;
-        Vector2 eye = shown.Player is { Dead: false } p
+        var shown = playing ? world! : screen == Screen.Editor && editor != null ? editor.World : menuWorld;
+        Vector2 eye = screen == Screen.Editor ? camPos : shown.Player is { Dead: false } p
             ? p.Pos + new Vector2(0, -10)
             : camPos + new Vector2(MathF.Sin(time * 0.35f) * 420, -60 + MathF.Cos(time * 0.27f) * 140);
 
@@ -438,10 +537,11 @@ public sealed class App
         Raylib.BeginMode2D(cam);
         renderer.DrawScene(shown, cam, eye);
         if (screen == Screen.Play && !paused && world?.Player is { } pl) renderer.DrawAimPreview(world, pl);
+        if (screen == Screen.Editor) editor?.DrawOverlay();
         Raylib.EndMode2D();
 
         Raylib.BeginMode2D(new Camera2D { Zoom = K.Px });
-        Vignette();
+        if (screen != Screen.Editor) Vignette();
         switch (screen)
         {
             case Screen.Menu: DrawMenu(); break;
@@ -455,6 +555,8 @@ public sealed class App
                 break;
             case Screen.Complete: DrawHud(); DrawComplete(); break;
             case Screen.Ending: DrawEnding(); break;
+            case Screen.MyMaps: DrawMyMaps(); break;
+            case Screen.Editor: editor?.DrawUi(); break;
         }
         if (fade > 0) Raylib.DrawRectangle(0, 0, K.ScreenW, K.ScreenH, C(6, 8, 11, (int)(255 * SmoothStep(fade))));
         // force the canvas alpha to opaque (translucent overlays reduce destination alpha)
@@ -511,7 +613,7 @@ public sealed class App
         UI.Text("A SIDE-SCROLLING TEST OF SPATIAL REASONING", new Vector2(x + 2, 214), 16, Dim);
         Mascot(new Vector2(x + 990, 196), 4, facingLeft: true);
 
-        float y = 262, h = 60, gap = 10, bw = 440;
+        float y = 250, h = 60, gap = 8, bw = 440;
         int cont = ContinueLevel;
         bool started = save.Best.Any(b => b > 0);
         string sub = $"CHAMBER {cont + 1:00} - {Levels.All[cont].Name}";
@@ -521,6 +623,10 @@ public sealed class App
         if (UI.Button("random", new Rectangle(x, y, bw, h), "RANDOM TEST", accent: PP.Exit, sub: rsub))
             StartRandom(Environment.TickCount & 0xFFFFF, newRun: true);
         y += h + gap;
+        string msub = library.Maps.Count > 0 ? $"BUILD AND PLAY YOUR OWN - {library.Maps.Count} SAVED" : "BUILD AND PLAY YOUR OWN CHAMBERS";
+        if (UI.Button("builder", new Rectangle(x, y, bw, h), "MAP BUILDER", accent: PP.BlueRamp[3], sub: msub)) Go(OpenMyMaps);
+        y += h + gap;
+        h = 48;
         if (UI.Button("select", new Rectangle(x, y, bw, h), "SELECT CHAMBER")) Go(() => { selPage = -1; SetScreen(Screen.Select); });
         y += h + gap;
         if (UI.Button("options", new Rectangle(x, y, bw, h), "OPTIONS")) Go(() => SetScreen(Screen.Options));
@@ -574,6 +680,18 @@ public sealed class App
         UI.TextShadow(title, new Vector2(66, 40), 46, PP.CreamHi);
         UI.Text(sub, new Vector2(68, 98), 16, Dim);
         if (UI.SmallButton("back", new Rectangle(K.ScreenW - 66 - 150, 44, 150, 44), "BACK")) Go(() => SetScreen(Screen.Menu));
+    }
+
+    void DrawMyMaps()
+    {
+        Header("MAP BUILDER", $"{library.Maps.Count} {(library.Maps.Count == 1 ? "MAP" : "MAPS")} SAVED ON THIS DEVICE");
+        var (act, m) = library.Draw(Raylib.GetFrameTime(), stateT, Dim);
+        switch (act)
+        {
+            case MapLibrary.Act.New: Go(NewMap); break;
+            case MapLibrary.Act.Edit: { var em = m!; Go(() => OpenEditor(em)); break; }
+            case MapLibrary.Act.Play: { var pm = m!; Go(() => PlayCustom(pm, false)); break; }
+        }
     }
 
     void DrawSelect()
@@ -745,15 +863,15 @@ public sealed class App
     {
         var w = world!;
         var def = w.Def;
-        string num = randomMode ? $"{streak + 1:00}" : $"{level + 1:00}";
-        string label = randomMode ? $"RANDOM TEST  SEED {randomSeed}" : "TEST CHAMBER";
-        string name = randomMode ? "STREAK" : def.Name.ToUpperInvariant();
+        string num = customMode ? "MY" : randomMode ? $"{streak + 1:00}" : $"{level + 1:00}";
+        string label = customMode ? (fromEditor ? "MAP TEST" : "CUSTOM MAP") : randomMode ? $"RANDOM TEST  SEED {randomSeed}" : "TEST CHAMBER";
+        string name = customMode ? def.Name.ToUpperInvariant() : randomMode ? "STREAK" : def.Name.ToUpperInvariant();
         var numM = UI.Measure(num, 46);
         float nameX = 34 + numM.X + 24;
         float tagW = MathF.Max(UI.Measure(name, 30).X, UI.Measure(label, 16).X) + nameX + 24 - 16;
         var tag = new Rectangle(16, 14, tagW, 74);
         UI.Panel(tag, 0.92f);
-        Raylib.DrawRectangle((int)tag.X + 2, (int)tag.Y + 2, 4, (int)tag.Height - 4, randomMode ? PP.Exit : PP.OrangeRamp[2]);
+        Raylib.DrawRectangle((int)tag.X + 2, (int)tag.Y + 2, 4, (int)tag.Height - 4, customMode ? PP.BlueRamp[3] : randomMode ? PP.Exit : PP.OrangeRamp[2]);
         UI.Text(num, new Vector2(34, 30), 46, PP.CreamHi, bold: true);
         UI.Text(label, new Vector2(nameX, 26), 16, Dim);
         UI.Text(name, new Vector2(nameX, 48), 30, PP.CreamHi, bold: true);
@@ -814,12 +932,12 @@ public sealed class App
         Raylib.DrawRectangleLinesEx(r, 2, C(30, 32, 40, A(255)));
         Raylib.DrawRectangle((int)r.X + 2, (int)r.Y + 2, (int)r.Width - 4, 2, C(255, 255, 255, A(200)));
         var ink = C(30, 32, 40, A(255));
-        string num = randomMode ? $"{streak + 1:00}" : $"{level + 1:00}";
+        string num = customMode ? "MY" : randomMode ? $"{streak + 1:00}" : $"{level + 1:00}";
         UI.Text(num, new Vector2(r.X + 28, r.Y + 22), 120, ink);
         var nm = UI.Measure(num, 120);
-        UI.Text(randomMode ? "RANDOM" : $"/{Levels.All.Length}", new Vector2(r.X + 40 + nm.X, r.Y + 22 + nm.Y - 28), 30, C(120, 122, 130, A(255)));
+        UI.Text(customMode ? "MAP" : randomMode ? "RANDOM" : $"/{Levels.All.Length}", new Vector2(r.X + 40 + nm.X, r.Y + 22 + nm.Y - 28), 30, C(120, 122, 130, A(255)));
         Raylib.DrawRectangle((int)r.X + 28, (int)r.Y + 150, (int)r.Width - 56, 4, ink);
-        UI.Text(randomMode ? "GENERATED CHAMBER" : def.Name.ToUpperInvariant(), new Vector2(r.X + 28, r.Y + 166), 30, ink);
+        UI.Text(customMode ? def.Name.ToUpperInvariant() : randomMode ? "GENERATED CHAMBER" : def.Name.ToUpperInvariant(), new Vector2(r.X + 28, r.Y + 166), 30, ink);
         Icons.Draw(def, new Vector2(r.X + 28, r.Y + 206), 28, ink, alignRight: false, filled: true);
         Raylib.DrawRectangle((int)(r.X + r.Width - 64), (int)r.Y + 28, 32, 32, PP.OrangeRamp[2].WithAlpha(alpha));
         Raylib.DrawRectangle((int)(r.X + r.Width - 64), (int)r.Y + 68, 32, 32, PP.BlueRamp[2].WithAlpha(alpha));
@@ -863,7 +981,11 @@ public sealed class App
         y += 68;
         if (UI.Button("p_restart", new Rectangle(x, y, bw, 56), "RESTART")) Go(() => LoadLevel(false));
         y += 68;
-        if (UI.Button("p_select", new Rectangle(x, y, bw, 56), "CHAMBERS")) Go(() => SetScreen(Screen.Select));
+        if (customMode)
+        {
+            if (UI.Button("p_select", new Rectangle(x, y, bw, 56), fromEditor ? "BACK TO EDITOR" : "MY MAPS")) ExitCustom();
+        }
+        else if (UI.Button("p_select", new Rectangle(x, y, bw, 56), "CHAMBERS")) Go(() => SetScreen(Screen.Select));
         y += 68;
         if (UI.Button("p_menu", new Rectangle(x, y, bw, 56), "MAIN MENU")) Go(() => SetScreen(Screen.Menu));
     }
@@ -874,7 +996,7 @@ public sealed class App
         Raylib.DrawRectangle(0, 0, K.ScreenW, K.ScreenH, C(6, 8, 12, (int)(160 * a)));
         var r = new Rectangle(K.ScreenW / 2f - 290, MathF.Round(K.ScreenH / 2f - 236 + (1 - EaseOutCubic(stateT * 3)) * 30), 580, 472);
         UI.Panel(r, a, PP.Exit);
-        UI.Text(randomMode ? $"RANDOM TEST  SEED {randomSeed}" : $"TEST CHAMBER {level + 1:00}", new Vector2(K.ScreenW / 2f, r.Y + 40), 16, Dim.WithAlpha(a), UI.Align.Center);
+        UI.Text(customMode ? (fromEditor ? "MAP TEST" : "CUSTOM MAP") + "  " + world!.Def.Name.ToUpperInvariant() : randomMode ? $"RANDOM TEST  SEED {randomSeed}" : $"TEST CHAMBER {level + 1:00}", new Vector2(K.ScreenW / 2f, r.Y + 40), 16, Dim.WithAlpha(a), UI.Align.Center);
         UI.TextShadow(randomMode ? "PASSED" : "COMPLETE", new Vector2(K.ScreenW / 2f, r.Y + 90), 60, PP.Exit.WithAlpha(a), UI.Align.Center);
 
         float y = r.Y + 150;
@@ -894,15 +1016,20 @@ public sealed class App
         }
         Row("TIME", UI.FormatTime(levelTime), PP.CreamHi, newBest ? "NEW BEST" : null);
         if (randomMode) Row("STREAK", streak.ToString(), PP.Exit, streak >= save.RandomBestStreak && streak > 1 ? "RECORD" : null);
+        else if (customMode) Row("BEST", UI.FormatTime(customMap!.Best), PP.Cream);
         else Row("BEST", UI.FormatTime(save.Best[level]), PP.Cream);
         Row("PORTALS PLACED", world!.PortalsPlaced.ToString(), PP.Cream);
         Row("DEATHS", deaths.ToString(), deaths == 0 ? PP.Exit : PP.Cream);
 
-        bool last = !randomMode && level + 1 >= Levels.All.Length;
+        bool last = !randomMode && !customMode && level + 1 >= Levels.All.Length;
         float by = r.Y + r.Height - 80;
-        string next = randomMode ? "NEXT TEST" : last ? "FINISH" : "NEXT (ENTER)";
+        string next = customMode ? (fromEditor ? "BACK TO EDITOR" : "MY MAPS") : randomMode ? "NEXT TEST" : last ? "FINISH" : "NEXT (ENTER)";
         if (UI.SmallButton("c_next", new Rectangle(r.X + r.Width - 50 - 210, by, 210, 50), next, PP.Exit)) NextLevel();
-        if (!randomMode && UI.SmallButton("c_retry", new Rectangle(r.X + 50, by, 124, 50), "REPLAY")) StartLevel(level);
+        if (!randomMode && UI.SmallButton("c_retry", new Rectangle(r.X + 50, by, 124, 50), "REPLAY"))
+        {
+            if (customMode) { var cm = customMap!; var fe = fromEditor; Go(() => PlayCustom(cm, fe)); }
+            else StartLevel(level);
+        }
         if (UI.SmallButton("c_menu", new Rectangle(r.X + (randomMode ? 50 : 186), by, 100, 50), "MENU")) Go(() => SetScreen(Screen.Menu));
     }
 }

@@ -47,3 +47,13 @@ If the tests fail, don't release: fix the problem or tell the user.
 - Random Test rooms: `Game/Procgen.cs`. Each room archetype must emit its own bot solution.
 - Look at art without a window: `--preview <n|rSEED> out.png`, `--sprites out.png`, `--banner out.png`.
   Real screenshots: `scripts/shots.sh <dir> [names]` (needs a display; run it outside the sandbox).
+
+## Map builder (player-made maps)
+
+- `Game/MapEditor.cs` (editor UI + editing), `Game/MapLibrary.cs` (My Maps screen), `Game/CustomMaps.cs`
+  (`CustomMap` JSON format, share codes, files in `%APPDATA%/Portal2D/maps`). `App.cs` wires `Screen.MyMaps`,
+  `Screen.Editor` and custom play (`customMode`).
+- The editor draws a real `World` rebuilt after each edit, so a new tile type needs: a tool in `MapEditor.Tools`,
+  an icon in `ToolIcons`, and its character in `CustomMap.Allowed`.
+- `Testing/MapTests.cs` runs inside `--test` (editing ops, sanitising, share codes, files, walking a blank map).
+- Screenshots: `--shot editor|editorhelp|mymaps <secs> out.png`.
