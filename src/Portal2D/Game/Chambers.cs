@@ -400,10 +400,36 @@ public static class Chambers
                 }));
         }
 
+        // Stepping Stones: goo everywhere, three islands, and a ceiling portal over each one
+        {
+            var b = LevelBuilder.Room();
+            b.Fill(1, 20, 6, 20, '#');
+            b.Fill(7, 20, 34, 21, '~');
+            b.Fill(16, 20, 19, 20, '#').Fill(26, 20, 29, 20, '#');
+            b.Fill(35, 20, 38, 21, 'X');
+            b.Fill(15, 0, 20, 0, '#').Fill(25, 0, 30, 0, '#').Fill(33, 0, 38, 0, '#');
+            b.Set(2, 19, 'P').Set(37, 19, 'E');
+            list.Add(Def("Stepping Stones", b,
+                ["The goo is too wide to jump. The ceiling is not too far to shoot.",
+                 "Enter the floor portal, fall out of the ceiling onto the next stone.",
+                 "Each stone needs a fresh pair."],
+                bot =>
+                {
+                    int n = 0;
+                    bool Tele() => bot.Player.Teleports > n;
+                    IEnumerable<InputState> Hop(int fromCol, int ceilCol, int landX) => Seq(
+                        bot.Fire(Blue, Floor(fromCol, 20)), bot.Fire(Orange, Ceil(ceilCol, 0)),
+                        bot.Do(() => n = bot.Player.Teleports),
+                        Enter(bot, (fromCol + 1) * 32, Tele, landX));
+                    return Seq(Hop(4, 16, 17 * 32), bot.WalkTo(X(18)), Hop(17, 26, 27 * 32), bot.WalkTo(X(28)),
+                        Hop(27, 34, 35 * 32), bot.WalkTo(X(37)));
+                }));
+        }
+
         // easiest first: each one is its own idea, so the order is about how much it asks of you
         string[] order =
         [
-            "Stool Pigeon", "Pinball", "Launch Pad", "Trampoline Park", "Peephole", "Catapult", "Moat", "Hold the Door",
+            "Stool Pigeon", "Pinball", "Launch Pad", "Trampoline Park", "Peephole", "Stepping Stones", "Catapult", "Moat", "Hold the Door",
             "Rush Hour", "Safe Cracker", "Disarmed", "Jailbreak", "Bank Shot", "Spotlight", "Double Decker",
             "Fizzler Row", "Ascent", "Terminal Velocity", "Rooftops"
         ];

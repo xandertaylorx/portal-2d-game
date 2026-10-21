@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Net.Http;
 using Portal2D.Render;
 
 namespace Portal2D.Game;
@@ -244,5 +245,71 @@ public static class CustomMaps
         catch
         {
         }
+    }
+}
+
+/// <summary>
+/// Hand-picked maps hosted in the game's GitHub repository (<c>featured/maps.json</c>). Fetched in the background
+/// when the player opens the featured list; nothing is downloaded until then.
+/// </summary>
+public static class FeaturedMaps
+{
+    public const string Url = "https://raw.githubusercontent.com/" + Updater.ReleaseRepo + "/main/featured/maps.json";
+
+    public sealed record Entry(string Name, string Author, string Note, CustomMap Map);
+
+    sealed class Row
+    {
+        public string Name { get; set; } = "";
+        public string Author { get; set; } = "";
+        public string Note { get; set; } = "";
+        public string Code { get; set; } = "";
+    }
+
+    sealed class Doc
+    {
+        public List<Row> Maps { get; set; } = [];
+    }
+
+    public enum State { Idle, Loading, Ready, Failed }
+
+    public static volatile State Status = State.Idle;
+    public static List<Entry> Items = [];
+
+    public static void LoadAsync()
+    {
+        if (Status == State.Loading) return;
+        Status = State.Loading;
+        Task.Run(async () =>
+        {
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("Portal2D");
+                var text = await http.GetStringAsync(Url);
+                Items = Parse(text);
+                Status = State.Ready;
+            }
+            catch
+            {
+                Status = State.Failed;
+            }
+        });
+    }
+
+    /// <summary>Turns the featured file into playable maps. Bad entries are skipped.</summary>
+    public static List<Entry> Parse(string json)
+    {
+        var list = new List<Entry>();
+        var doc = JsonSerializer.Deserialize<Doc>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        foreach (var r in doc?.Maps ?? [])
+        {
+            var m = CustomMap.FromShareCode(r.Code);
+            if (m == null) continue;
+            if (!string.IsNullOrWhiteSpace(r.Name)) m.Name = CustomMap.CleanName(r.Name);
+            list.Add(new Entry(m.Name, CustomMap.CleanName(r.Author), r.Note ?? "", m));
+            if (list.Count >= 60) break;
+        }
+        return list;
     }
 }

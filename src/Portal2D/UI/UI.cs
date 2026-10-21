@@ -40,6 +40,14 @@ public static class UI
 
     public static Vector2 Measure(string s, float size, bool bold = false, float spacing = -1) => PixelFont.Measure(s, Scale(size));
 
+    /// <summary>Trims text so it fits in maxW virtual units at the given size (ends with ".." when cut).</summary>
+    public static string Fit(string s, float size, float maxW)
+    {
+        if (Measure(s, size).X <= maxW) return s;
+        while (s.Length > 1 && Measure(s + "..", size).X > maxW) s = s[..^1];
+        return s.TrimEnd() + "..";
+    }
+
     public static void Text(string s, Vector2 pos, float size, Color col, Align align = Align.Left, bool bold = false, float spacing = -1)
     {
         int sc = Scale(size);
@@ -105,11 +113,13 @@ public static class UI
         var col = enabled ? (hot ? Color.White : PP.Cream) : C(100, 104, 112);
         float tx = rr.X + 30;
         if (hot && (int)(Time * 3) % 2 == 0) Text(">", new Vector2(rr.X + 16, rr.Y + rr.Height / 2 - 7), 16, acc);
+        float maxW = rr.Width - 30 - 16;
+        label = Fit(label, 30, maxW);
         if (sub == null) Text(label, new Vector2(tx, rr.Y + rr.Height / 2 - 14), 30, col, bold: true);
         else
         {
             Text(label, new Vector2(tx, rr.Y + 6), 30, col, bold: true);
-            Text(sub, new Vector2(tx, rr.Y + rr.Height - 20), 16, C(150, 158, 172));
+            Text(Fit(sub, 16, maxW), new Vector2(tx, rr.Y + rr.Height - 20), 16, C(150, 158, 172));
         }
         if (over && Click) { OnClick?.Invoke(); return true; }
         return false;
@@ -125,7 +135,7 @@ public static class UI
         Raylib.DrawRectangle((int)r.X + 2, (int)r.Y + 2, (int)r.Width, (int)r.Height, C(0, 0, 0, 120));
         Raylib.DrawRectangleRec(r, hot ? acc : C(30, 34, 44));
         Raylib.DrawRectangleLinesEx(r, 2, hot ? Color.White.WithAlpha(0.7f) : acc);
-        Text(label, new Vector2(r.X + r.Width / 2, r.Y + r.Height / 2), 16, hot ? PP.Ink : PP.Cream, Align.Center);
+        Text(Fit(label, 16, r.Width - 12), new Vector2(r.X + r.Width / 2, r.Y + r.Height / 2), 16, hot ? PP.Ink : PP.Cream, Align.Center);
         if (over && Click) { OnClick?.Invoke(); return true; }
         return false;
     }
@@ -158,7 +168,7 @@ public static class UI
         bool over = Contains(r, Mouse);
         float h = Hover(id, over);
         Panel(r, 1, h > 0.5f ? PP.BlueRamp[2] : null);
-        Text(label, new Vector2(r.X + 18, r.Y + r.Height / 2 - 7), 16, PP.Cream);
+        Text(Fit(label, 16, r.Width - 18 - 74 - 80), new Vector2(r.X + 18, r.Y + r.Height / 2 - 7), 16, PP.Cream);
         var sw = SnapR(new Rectangle(r.X + r.Width - 74, r.Y + r.Height / 2 - 12, 56, 24));
         Raylib.DrawRectangleRec(sw, value ? PP.BlueRamp[1] : C(44, 50, 63));
         Raylib.DrawRectangleLinesEx(sw, 2, value ? PP.BlueRamp[3] : C(70, 78, 96));

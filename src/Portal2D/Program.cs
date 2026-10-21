@@ -44,6 +44,8 @@ public static class Program
             foreach (var (name, rooms, score) in Levels.ComposedInfo) Console.WriteLine($"{n++,3} {name,-16} rooms={rooms} score={score}");
             return 0;
         }
+        int ft = Array.IndexOf(args, "--featured");
+        if (ft >= 0) return Featured.Build(args[ft + 1]);
         if (args.Contains("--procdiag")) { Console.Write(Procgen.Diagnose(20)); return 0; }
         int pg = Array.IndexOf(args, "--procgen");
         if (pg >= 0)

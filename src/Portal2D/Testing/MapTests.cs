@@ -67,6 +67,34 @@ public static class MapTests
         for (int f = 0; f < 60 * 20 && !w.Player!.Won; f++) TestRunner.StepFrame(w, bot.In(mx: 1));
         Check(w.Player!.Won, "the player can walk from start to exit in a blank map");
 
+        // one-button portals: clicks alternate blue and orange
+        {
+            var cm = CustomMap.Blank("CYCLE");
+            var rows = (string[])cm.Map.Clone();
+            rows[16] = "X" + new string('#', rows[16].Length - 2) + "X";
+            cm.Map = rows;
+            var cw = new World(cm.ToDef());
+            var cb = new Bot(cw);
+            cb.Aim = new System.Numerics.Vector2(cw.Player!.Pos.X, 16 * K.Tile + 1);
+            var shot = cb.In(); shot.FireCycle = true;
+            for (int i = 0; i < 2; i++)
+            {
+                cb.Aim = new System.Numerics.Vector2(cw.Player!.Pos.X + i * 200, 16 * K.Tile + 1);
+                shot.AimWorld = cb.Aim;
+                TestRunner.StepFrame(cw, shot);
+                for (int f = 0; f < 30; f++) TestRunner.StepFrame(cw, cb.In());
+                if (i == 0) Check(cw.Portals[0] != null && cw.Portals[1] == null, "the first one-button shot is blue");
+            }
+            Check(cw.Portals[0] != null && cw.Portals[1] != null, "the second one-button shot is orange");
+        }
+
+        // featured list: share codes become maps, junk entries are skipped
+        {
+            var good = CustomMap.Blank("FEAT").ToShareCode();
+            var list = FeaturedMaps.Parse("{\"maps\":[{\"name\":\"hello\",\"author\":\"me\",\"code\":\"" + good + "\"},{\"name\":\"bad\",\"code\":\"nope\"}]}");
+            Check(list.Count == 1 && list[0].Name == "HELLO" && list[0].Map.Name == "HELLO", "featured list keeps good maps and skips junk");
+        }
+
         foreach (var s in bad) Console.WriteLine("  MAP BUILDER FAIL: " + s);
         Console.WriteLine(bad.Count == 0 ? "Map builder: OK" : $"Map builder: {bad.Count} FAILURES");
         return bad.Count == 0 ? 0 : 1;

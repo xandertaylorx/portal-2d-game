@@ -2,6 +2,20 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.7.0] - 2026-10-21
+
+### Added
+- **Featured maps.** Press **FEATURED MAPS** on the Map Builder screen to browse hand-picked chambers hosted on the
+  game's GitHub page. Add one to My Maps and play it. Six maps to start, more to come.
+- **One-button portals.** A new option in OPTIONS makes left click fire blue, then orange, then blue again, so you
+  can play with a single button. The original left = blue, right = orange is still the default.
+- **Three new chambers.** *Stepping Stones* (a new handcrafted chamber), plus *Stairway* and *Crossfire*.
+  Chambers now run to 53, with Final Exam still at the end.
+
+### Changed
+- You must beat your own map before you can share it, so everything shared is known to be finishable.
+- The main menu buttons are wider and text that is too long for a button is shortened instead of spilling out.
+
 ## [2.6.1] - 2026-10-21
 
 ### Fixed

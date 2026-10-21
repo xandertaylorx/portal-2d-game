@@ -20,7 +20,7 @@ public struct GameEvent
 public struct InputState
 {
     public int MoveX;
-    public bool JumpPressed, JumpHeld, UsePressed, FireBlue, FireOrange;
+    public bool JumpPressed, JumpHeld, UsePressed, FireBlue, FireOrange, FireCycle;
     public Vector2 AimWorld;
 }
 
@@ -273,6 +273,8 @@ public sealed class World
 
     // ---------------------------------------------------------------- update
 
+    PortalColor nextShot = PortalColor.Blue;
+
     public void Emit(Sfx s, Vector2 pos, float shake = 0) => Events.Add(new GameEvent { Sound = s, Pos = pos, Shake = shake });
 
     public void Update(float dt, InputState input)
@@ -375,6 +377,16 @@ public sealed class World
         {
             if (input.FireBlue && GunAllows(PortalColor.Blue)) Shoot(p, PortalColor.Blue);
             else if (input.FireOrange && GunAllows(PortalColor.Orange)) Shoot(p, PortalColor.Orange);
+            else if (input.FireCycle)
+            {
+                var c = nextShot;
+                if (!GunAllows(c)) c = c == PortalColor.Blue ? PortalColor.Orange : PortalColor.Blue;
+                if (GunAllows(c))
+                {
+                    Shoot(p, c);
+                    nextShot = c == PortalColor.Blue ? PortalColor.Orange : PortalColor.Blue;
+                }
+            }
         }
 
         // exit

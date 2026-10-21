@@ -128,6 +128,8 @@ public static class Levels
             ("Echo", 46, [Hd(SL), N(MO), N(PC), N(CX)], null),
             ("Hot Foot", 47, [Hd(SP), Hd(PH), Hd(GS), N(GI), N(CW)], ["Don't look down. There's goo down there."]),
             ("Kitchen Sink", 48, [N(UF), N(BS), N(ST), N(PE), N(TB)], null),
+            ("Stairway", 51, [N(PH), Hd(GS), N(SP), N(PC)], ["Up, across, and up again."]),
+            ("Crossfire", 52, [Hd(BS), N(TB), N(CW)], null),
             ("Pressure Cooker", 49, [Hd(PT), N(FZ), Hd(CW), N(MO), Hd(SL), N(GK)], ["Six rooms. Pace yourself."]),
             ("Final Exam", 50, [Hd(CC), Hd(PE), Hd(CT), Hd(FL), Hd(UF), Hd(BS), Hd(SL), Hd(PT), N(MO)],
                 ["Nine rooms. Everything you've learned.", "Good luck."]),

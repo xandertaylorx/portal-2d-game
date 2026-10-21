@@ -26,6 +26,8 @@ public sealed class SaveData
     public int TotalDeaths { get; set; }
     public int RandomBestStreak { get; set; }
     public int RandomCleared { get; set; }
+    /// <summary>Left click alternates blue and orange portals instead of left = blue, right = orange.</summary>
+    public bool OneClickPortals { get; set; }
     public bool CheckUpdates { get; set; } = true;
     public bool EditorHelpSeen { get; set; }
     public int Schema { get; set; }

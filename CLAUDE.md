@@ -37,9 +37,9 @@ If the tests fail, don't release: fix the problem or tell the user.
 ## Working on levels
 
 - Handcrafted chambers 1-21: `Game/Levels.cs`. Each needs a reference solution in `Testing/Solutions.cs` (same index).
-- Chambers 22-40: handcrafted in `Game/Chambers.cs`, each carries its own bot `Solution`. The list at the end of
+- Chambers 22-41: handcrafted in `Game/Chambers.cs`, each carries its own bot `Solution`. The list at the end of
   `Chambers.Add` sets the order and must name every chamber.
-- Chambers 41-50: `Levels.AddComposed`, each a fixed list of `Procgen` rooms plus a seed. Their solutions are
+- Chambers 42-53: `Levels.AddComposed`, each a fixed list of `Procgen` rooms plus a seed. Their solutions are
   generated with the rooms. If one fails `--test`, change its seed or rooms. Rooms that need a floor-level entrance
   (Fling, Laser, UpFling, TwinBeam, Spotlight) can't follow rooms that exit high (HighLedge, Gel, UpFling, Stool).
 - `--test` must pass for all chambers, and `--procdiag` checks every room type. Best times are saved by chamber **name**, so renaming a chamber resets its
@@ -57,3 +57,10 @@ If the tests fail, don't release: fix the problem or tell the user.
   an icon in `ToolIcons`, and its character in `CustomMap.Allowed`.
 - `Testing/MapTests.cs` runs inside `--test` (editing ops, sanitising, share codes, files, walking a blank map).
 - Screenshots: `--shot editor|editorhelp|mymaps <secs> out.png`.
+
+## Featured maps
+
+- `featured/maps.json` on `main` is what the in-game FEATURED MAPS list downloads (`FeaturedMaps` in `Game/CustomMaps.cs`).
+  Regenerate it with `dotnet run --project src/Portal2D -- --featured featured/maps.json` (`Testing/Featured.cs`; only maps the
+  bot can beat are written), or add entries by hand: `{ "name", "author", "note", "code" }` with a `P2D1:` share code.
+  Custom maps are capped at 90 tiles wide, so keep generated ones short. Commit and push it: players read it from `main`.

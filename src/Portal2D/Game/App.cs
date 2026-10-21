@@ -380,27 +380,28 @@ public sealed class App
         {
             MoveX = mx, JumpPressed = jp, JumpHeld = jh,
             UsePressed = Raylib.IsKeyPressed(KeyboardKey.E) || Raylib.IsKeyPressed(KeyboardKey.F),
-            FireBlue = Raylib.IsMouseButtonPressed(MouseButton.Left),
-            FireOrange = Raylib.IsMouseButtonPressed(MouseButton.Right),
+            FireBlue = !save.OneClickPortals && Raylib.IsMouseButtonPressed(MouseButton.Left),
+            FireOrange = !save.OneClickPortals && Raylib.IsMouseButtonPressed(MouseButton.Right),
+            FireCycle = save.OneClickPortals && Raylib.IsMouseButtonPressed(MouseButton.Left),
             AimWorld = Raylib.GetScreenToWorld2D(UI.Mouse * K.Px, cam)
         };
     }
 
-    bool pendJump, pendUse, pendBlue, pendOrange;
+    bool pendJump, pendUse, pendBlue, pendOrange, pendCycle;
 
     void Step(World w, float dt, InputState input, bool silent)
     {
         accumulator += dt;
         // one-frame presses are latched until a sim step consumes them, so frames that run no step don't swallow a jump
-        pendJump |= input.JumpPressed; pendUse |= input.UsePressed; pendBlue |= input.FireBlue; pendOrange |= input.FireOrange;
+        pendJump |= input.JumpPressed; pendUse |= input.UsePressed; pendBlue |= input.FireBlue; pendOrange |= input.FireOrange; pendCycle |= input.FireCycle;
         bool first = true;
         int guard = 0;
         while (accumulator >= K.SimDt && guard++ < 10)
         {
             var i = input;
             i.JumpPressed = first && pendJump; i.UsePressed = first && pendUse;
-            i.FireBlue = first && pendBlue; i.FireOrange = first && pendOrange;
-            if (first) pendJump = pendUse = pendBlue = pendOrange = false;
+            i.FireBlue = first && pendBlue; i.FireOrange = first && pendOrange; i.FireCycle = first && pendCycle;
+            if (first) pendJump = pendUse = pendBlue = pendOrange = pendCycle = false;
             w.Update(K.SimDt, i);
             first = false;
             accumulator -= K.SimDt;
@@ -619,17 +620,17 @@ public sealed class App
         UI.Text("A SIDE-SCROLLING TEST OF SPATIAL REASONING", new Vector2(x + 2, 214), 16, Dim);
         Mascot(new Vector2(x + 990, 196), 4, facingLeft: true);
 
-        float y = 250, h = 60, gap = 8, bw = 440;
+        float y = 250, h = 60, gap = 8, bw = 520;
         int cont = ContinueLevel;
         bool started = save.Best.Any(b => b > 0);
         string sub = $"CHAMBER {cont + 1:00} - {Levels.All[cont].Name}";
         if (UI.Button("play", new Rectangle(x, y, bw, h), started ? "CONTINUE" : "BEGIN TESTING", accent: PP.OrangeRamp[2], sub: sub)) StartLevel(cont);
         y += h + gap;
-        string rsub = save.RandomBestStreak > 0 ? $"ENDLESS GENERATED CHAMBERS - BEST STREAK {save.RandomBestStreak}" : "ENDLESS GENERATED CHAMBERS";
+        string rsub = save.RandomBestStreak > 0 ? $"ENDLESS CHAMBERS - BEST STREAK {save.RandomBestStreak}" : "ENDLESS GENERATED CHAMBERS";
         if (UI.Button("random", new Rectangle(x, y, bw, h), "RANDOM TEST", accent: PP.Exit, sub: rsub))
             StartRandom(Environment.TickCount & 0xFFFFF, newRun: true);
         y += h + gap;
-        string msub = library.Maps.Count > 0 ? $"BUILD AND PLAY YOUR OWN - {library.Maps.Count} SAVED" : "BUILD AND PLAY YOUR OWN CHAMBERS";
+        string msub = library.Maps.Count > 0 ? $"BUILD YOUR OWN - {library.Maps.Count} SAVED" : "BUILD AND PLAY YOUR OWN CHAMBERS";
         if (UI.Button("builder", new Rectangle(x, y, bw, h), "MAP BUILDER", accent: PP.BlueRamp[3], sub: msub)) Go(OpenMyMaps);
         y += h + gap;
         h = 48;
@@ -774,14 +775,14 @@ public sealed class App
     void DrawOptions()
     {
         Header("OPTIONS", "AUDIO, VISUALS AND DISPLAY");
-        var panel = new Rectangle(K.ScreenW / 2f - 300, 140, 600, 560);
+        var panel = new Rectangle(K.ScreenW / 2f - 300, 128, 600, 586);
         UI.Panel(panel);
-        float x = panel.X + 40, w = panel.Width - 80, y = panel.Y + 60;
+        float x = panel.X + 40, w = panel.Width - 80, y = panel.Y + 48;
         float m = save.Master, s = save.Sfx, a = save.Ambience;
         bool changed = false;
-        changed |= UI.Slider("vol_master", new Rectangle(x, y, w, 20), "MASTER VOLUME", ref m); y += 74;
-        changed |= UI.Slider("vol_sfx", new Rectangle(x, y, w, 20), "EFFECTS", ref s); y += 74;
-        changed |= UI.Slider("vol_amb", new Rectangle(x, y, w, 20), "AMBIENCE", ref a); y += 50;
+        changed |= UI.Slider("vol_master", new Rectangle(x, y, w, 20), "MASTER VOLUME", ref m); y += 66;
+        changed |= UI.Slider("vol_sfx", new Rectangle(x, y, w, 20), "EFFECTS", ref s); y += 66;
+        changed |= UI.Slider("vol_amb", new Rectangle(x, y, w, 20), "AMBIENCE", ref a); y += 42;
         if (changed)
         {
             save.Master = m; save.Sfx = s; save.Ambience = a;
@@ -790,13 +791,17 @@ public sealed class App
         }
         bool cones = save.Cones, sh = save.Shake, fs = save.Fullscreen;
         if (UI.Toggle("opt_cones", new Rectangle(x - 10, y, w + 20, 54), "PORTAL WINDOWS", ref cones)) { save.Cones = cones; renderer.WindowsEnabled = cones; changed = true; }
-        y += 66;
+        y += 60;
         if (UI.Toggle("opt_shake", new Rectangle(x - 10, y, w + 20, 54), "SCREEN SHAKE", ref sh)) { save.Shake = sh; changed = true; }
-        y += 66;
+        y += 60;
         if (UI.Toggle("opt_fs", new Rectangle(x - 10, y, w + 20, 54), "FULLSCREEN (F11)", ref fs)) ToggleFullscreen();
-        y += 66;
+        y += 60;
+        bool oc = save.OneClickPortals;
+        if (UI.Toggle("opt_oneclick", new Rectangle(x - 10, y, w + 20, 54), "ONE-BUTTON PORTALS", ref oc)) { save.OneClickPortals = oc; changed = true; }
+        UI.Text(oc ? "LEFT CLICK ALTERNATES BLUE AND ORANGE" : "LEFT CLICK = BLUE   RIGHT CLICK = ORANGE", new Vector2(x, y + 58), 16, Dim);
+        y += 82;
         bool cu = save.CheckUpdates;
-        if (UI.Toggle("opt_upd", new Rectangle(x - 10, y, w - 170, 54), "CHECK FOR UPDATES", ref cu)) { save.CheckUpdates = cu; changed = true; }
+        if (UI.Toggle("opt_upd", new Rectangle(x - 10, y, w - 170, 54), "AUTO UPDATES", ref cu)) { save.CheckUpdates = cu; changed = true; }
         if (UI.SmallButton("opt_updnow", new Rectangle(x + w - 150, y + 6, 160, 42), "CHECK NOW")) updater.CheckAsync();
         string us = updater.Status switch
         {
@@ -820,8 +825,8 @@ public sealed class App
         [
             (["A", "D"], "MOVE LEFT / RIGHT"),
             (["W", "SPACE"], "JUMP (HOLD FOR HIGHER)"),
-            (["LEFT MOUSE"], "FIRE THE BLUE PORTAL"),
-            (["RIGHT MOUSE"], "FIRE THE ORANGE PORTAL"),
+            (["LEFT MOUSE"], save.OneClickPortals ? "FIRE A PORTAL (BLUE, THEN ORANGE)" : "FIRE THE BLUE PORTAL"),
+            (["RIGHT MOUSE"], save.OneClickPortals ? "(NOT USED: ONE-BUTTON PORTALS)" : "FIRE THE ORANGE PORTAL"),
             (["E"], "PICK UP / DROP A CUBE"),
             (["R"], "RESTART THE CHAMBER"),
             (["H"], "SHOW / HIDE HINTS"),
@@ -904,17 +909,20 @@ public sealed class App
             DrawChamberCard(new Vector2(K.ScreenW / 2f - 220, MathF.Round(200 - (1 - slide) * 24)), slide);
         }
 
-        if (def.Hints.Length > 0)
+        var hints = save.OneClickPortals
+            ? def.Hints.Select(h => h.Replace("RIGHT MOUSE fires orange.", "Click again for orange.")).ToArray()
+            : def.Hints;
+        if (hints.Length > 0)
         {
             float show = hintsOn ? Clamp01((hintT - (showIntro ? 3.3f : 0.2f)) * 3) * Clamp01((hintEnd - hintT) / 0.8f) : 0;
             if (show > 0.01f)
             {
-                float maxW = def.Hints.Max(hh => UI.Measure(hh, 16).X);
-                var hr = new Rectangle(K.ScreenW / 2f - maxW / 2 - 30, 104, maxW + 60, def.Hints.Length * 28 + 26);
+                float maxW = hints.Max(hh => UI.Measure(hh, 16).X);
+                var hr = new Rectangle(K.ScreenW / 2f - maxW / 2 - 30, 104, maxW + 60, hints.Length * 28 + 26);
                 UI.Panel(hr, show);
                 Raylib.DrawRectangle((int)hr.X + 2, (int)hr.Y + 2, 4, (int)hr.Height - 4, PP.BlueRamp[2].WithAlpha(show));
-                for (int i = 0; i < def.Hints.Length; i++)
-                    UI.Text(def.Hints[i], new Vector2(K.ScreenW / 2f + 4, hr.Y + 27 + i * 28), 16, PP.Cream.WithAlpha(show), UI.Align.Center);
+                for (int i = 0; i < hints.Length; i++)
+                    UI.Text(hints[i], new Vector2(K.ScreenW / 2f + 4, hr.Y + 27 + i * 28), 16, PP.Cream.WithAlpha(show), UI.Align.Center);
             }
             else if (!hintsOn || hintT > hintEnd)
                 UI.Text("H HINTS   R RESTART   ESC PAUSE", new Vector2(20, K.ScreenH - 30), 16, Dim.WithAlpha(0.6f));
