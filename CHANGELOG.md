@@ -2,6 +2,13 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.9.1] - 2026-10-23
+
+### Changed
+- **A calmer main menu.** The three main actions (Continue, Random Test, Map Builder) stand out, and Chambers, Options
+  and Controls sit in one quiet row beneath them. The background is dimmer behind the menu, the tagline no longer
+  sits on the laser, and the button captions are shorter.
+
 ## [2.9.0] - 2026-10-23
 
 ### Added

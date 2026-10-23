@@ -13,7 +13,7 @@ import { SaveData, CustomMap, CustomMaps } from './maps.js';
 import { MapEditor } from './editor.js';
 import { MapLibrary } from './library.js';
 
-export const VERSION = '2.9.0';
+export const VERSION = '2.9.1';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 
@@ -467,36 +467,37 @@ export class App {
 
   drawMenu() {
     const g = this.g, s = this.save;
-    g.rectGradH(0, 0, 900, K.ScreenH, C(10, 11, 16, 245), C(10, 11, 16, 0));
+    // calm the busy background: a general dim plus a deeper shade behind the menu column
+    g.rect(0, 0, K.ScreenW, K.ScreenH, C(10, 11, 16, 70));
+    g.rectGradH(0, 0, 980, K.ScreenH, C(10, 11, 16, 250), C(10, 11, 16, 0));
     const intro = easeOutCubic(this.stateT * 2);
     const x = roundEven(80 - (1 - intro) * 40);
     this.title(V(x, 60));
-    UI.text('A SIDE-SCROLLING TEST OF SPATIAL REASONING', V(x + 2, 214), 16, DIM);
+    UI.text('A SIDE-SCROLLING TEST OF SPATIAL REASONING', V(x + 2, 236), 16, withAlpha(DIM, 0.8));
     this.mascot(V(x + 990, 196), 4, true);
 
-    let y = 250, h = 60;
-    const gap = 8, bw = 520;
+    // three main actions, then the rest in one quiet row
+    let y = 280;
+    const h = 60, gap = 8, bw = 520;
     const cont = this.continueLevel;
     const started = s.best.some((b) => b > 0);
     const sub = `CHAMBER ${String(cont + 1).padStart(2, '0')} - ${this.chambers[cont].name}`;
     if (UI.button('play', R(x, y, bw, h), started ? 'CONTINUE' : 'BEGIN TESTING', { accent: PP.OrangeRamp[2], sub })) this.startLevel(cont);
     y += h + gap;
-    const rsub = s.randomBestStreak > 0 ? `ENDLESS CHAMBERS - BEST STREAK ${s.randomBestStreak}` : 'ENDLESS GENERATED CHAMBERS';
+    const rsub = s.randomBestStreak > 0 ? `BEST STREAK ${s.randomBestStreak}` : 'ENDLESS GENERATED CHAMBERS';
     if (UI.button('random', R(x, y, bw, h), 'RANDOM TEST', { accent: PP.Exit, sub: rsub })) this.startRandom(true);
     y += h + gap;
-    const msub = this.library.maps.length > 0 ? `BUILD YOUR OWN - ${this.library.maps.length} SAVED` : 'BUILD AND PLAY YOUR OWN CHAMBERS';
+    const msub = this.library.maps.length > 0 ? `${this.library.maps.length} SAVED` : 'BUILD YOUR OWN CHAMBERS';
     if (UI.button('builder', R(x, y, bw, h), 'MAP BUILDER', { accent: PP.BlueRamp[3], sub: msub })) this.go(() => this.openMyMaps());
-    y += h + gap;
-    h = 48;
-    if (UI.button('select', R(x, y, bw, h), 'SELECT CHAMBER')) this.go(() => { this.selPage = -1; this.setScreen('select'); });
-    y += h + gap;
-    if (UI.button('options', R(x, y, bw, h), 'OPTIONS')) this.go(() => this.setScreen('options'));
-    y += h + gap;
-    if (UI.button('controls', R(x, y, bw, h), 'CONTROLS')) this.go(() => this.setScreen('controls'));
+    y += h + 20;
+    const sw = (bw - 2 * gap) / 3;
+    if (UI.smallButton('select', R(x, y, sw, 48), 'CHAMBERS')) this.go(() => { this.selPage = -1; this.setScreen('select'); });
+    if (UI.smallButton('options', R(x + sw + gap, y, sw, 48), 'OPTIONS')) this.go(() => this.setScreen('options'));
+    if (UI.smallButton('controls', R(x + 2 * (sw + gap), y, sw, 48), 'CONTROLS')) this.go(() => this.setScreen('controls'));
 
     const done = s.best.filter((b) => b > 0).length;
-    UI.text(`${done}/${this.chambers.length} CHAMBERS COMPLETE`, V(x + 2, K.ScreenH - 30), 16, DIM);
-    UI.text(`V${VERSION}  WEB EDITION`, V(K.ScreenW - 24, K.ScreenH - 30), 16, withAlpha(DIM, 0.6), Align.Right);
+    UI.text(`${done}/${this.chambers.length} CHAMBERS COMPLETE`, V(x + 2, K.ScreenH - 30), 16, withAlpha(DIM, 0.8));
+    UI.text(`V${VERSION}`, V(K.ScreenW - 24, K.ScreenH - 30), 16, withAlpha(DIM, 0.5), Align.Right);
   }
 
   header(title, sub, backTo = 'menu') {
