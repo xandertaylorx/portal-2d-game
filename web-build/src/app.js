@@ -13,7 +13,7 @@ import { SaveData, CustomMap, CustomMaps } from './maps.js';
 import { MapEditor } from './editor.js';
 import { MapLibrary } from './library.js';
 
-export const VERSION = '2.8.0';
+export const VERSION = '2.8.1';
 const DIM = C(150, 158, 172);
 
 export class App {
