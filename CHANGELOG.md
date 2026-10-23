@@ -2,6 +2,21 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.9.0] - 2026-10-23
+
+### Added
+- **Character customiser.** OPTIONS now has CUSTOMISE CHARACTER: 8 colours, 11 hats (cap, top hat, crown, party hat,
+  wizard hat, cowboy hat, beanie, propeller cap, chef hat, halo), face accessories (shades, glasses, moustache, blush)
+  and outfits (scarf, bow tie, tie, stripes, cape), plus a RANDOM button.
+- **Fullscreen button** in the corner of the page, so you don't have to dig through menus. F11 still works.
+- **HUD fades out of the way.** The chamber tag, timer, hints and intro card drop to 20% opacity while your cursor is
+  over them, so they never hide the action.
+- The site icon is now the little character.
+
+### Changed
+- The web game is now the main version. The C# desktop version has moved to `OLD-DESKTOP/` and is frozen.
+- In a window the game is drawn at a crisp whole-number scale again; fullscreen fills the screen.
+
 ## [2.8.1] - 2026-10-23
 
 ### Fixed

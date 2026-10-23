@@ -1,4 +1,6 @@
 #!/bin/zsh
+# RETIRED: the desktop game is frozen in OLD-DESKTOP/ and the web game at the repo root is the maintained version.
+# Kept for reference only; it no longer matches the repo layout (CHANGELOG.md and git live one level up).
 # Publishes a new version of Portal 2D.
 #
 #   ./scripts/release.sh 2.2.0
@@ -25,7 +27,6 @@ dotnet run --project "$PROJ" -c Release -- --procgen 30 | tail -1
 
 echo "== version $VERSION"
 sed -i '' -E "s#<Version>[^<]*</Version>#<Version>$VERSION</Version>#" "$PROJ"
-sed -i '' -E "s#export const VERSION = '[^']*'#export const VERSION = '$VERSION'#" "$ROOT/web-build/src/app.js"
 
 rm -rf "$OUT" && mkdir -p "$OUT"
 for RID in osx-arm64 osx-x64 win-x64 linux-x64; do

@@ -1,9 +1,9 @@
 // The game shell: screens, menus, HUD, level flow. Port of Game/App.cs (minus the desktop-only updater and quit).
 import {
-  K, C, withAlpha, clamp, clamp01, lerp, smoothStep, easeOutCubic, contains, V, R, roundEven, WHITE,
+  K, C, withAlpha, clamp, clamp01, approach, lerp, smoothStep, easeOutCubic, contains, V, R, roundEven, WHITE,
 } from './core.js';
 import { World, makeDef, emptyInput, GunMode } from './world.js';
-import { PP, Sprites } from './art.js';
+import { PP, Sprites, COLORS, HATS, FACE_NAMES, OUTFIT_NAMES, DEFAULT_LOOK, cleanLook, PLAYER_H } from './art.js';
 import { Gfx, PixelFont } from './gfx.js';
 import { Renderer } from './render.js';
 import { Audio } from './audio.js';
@@ -13,8 +13,9 @@ import { SaveData, CustomMap, CustomMaps } from './maps.js';
 import { MapEditor } from './editor.js';
 import { MapLibrary } from './library.js';
 
-export const VERSION = '2.8.1';
+export const VERSION = '2.9.0';
 const DIM = C(150, 158, 172);
+const PANEL_EDGE_C = C(58, 65, 80);
 
 export class App {
   constructor(canvas, data) {
@@ -28,6 +29,7 @@ export class App {
     this.menuDef = makeDef(data.levels.menu);
     this.randomPools = null;          // loaded on first use
     this.save = SaveData.load(this.chambers.map((l) => l.name));
+    Sprites.setLook(this.save.look);
     this.audio = new Audio();
     this.audio.master = this.save.master; this.audio.sfxVolume = this.save.sfx; this.audio.ambienceVolume = this.save.ambience;
     UI.onHover = () => this.audio.hover();
@@ -61,6 +63,7 @@ export class App {
     this.pend = { jump: false, use: false, blue: false, orange: false, cycle: false };
     this.cursorHidden = false;
     this.toast = ''; this.toastT = 0;
+    this.fades = {};
   }
 
   get currentDef() { return this.customMode ? this.customMap.toDef() : this.randomMode ? this.randomDef : this.chambers[this.level]; }
@@ -184,7 +187,7 @@ export class App {
       this.step(this.menuWorld, dt, emptyInput(), true);
       this.camPos = V(this.menuWorld.widthPx / 2 + Math.sin(this.time * 0.15) * 10, this.menuWorld.heightPx / 2);
       this.updateCam(dt);
-      if (Input.pressed('Escape') && this.screen !== 'menu' && !(this.screen === 'mymaps' && this.library.cancelModal())) this.go(() => this.setScreen('menu'));
+      if (Input.pressed('Escape') && this.screen !== 'menu' && !(this.screen === 'mymaps' && this.library.cancelModal())) this.go(() => this.setScreen(this.screen === 'character' ? 'options' : 'menu'));
       return;
     }
 
@@ -415,6 +418,7 @@ export class App {
       case 'select': this.drawSelect(); break;
       case 'options': this.drawOptions(); break;
       case 'controls': this.drawControls(); break;
+      case 'character': this.drawCharacter(); break;
       case 'play':
         this.drawHud();
         if (this.paused) this.drawPause(); else this.drawCrosshair();
@@ -456,8 +460,8 @@ export class App {
     const g = this.g;
     const frame = (this.time % 3.4) < 0.14 ? 1 : 0;
     const bob = roundEven(Math.sin(this.time * 3) * 1) * scale * 2;
-    const size = 16 * scale * 2;
-    g.tex(Sprites.playerTex, frame * 16, 0, facingLeft ? -16 : 16, 16, feet.x - size / 2, feet.y - size + bob, size, size);
+    const size = 16 * scale * 2, h = PLAYER_H * scale * 2;
+    g.tex(Sprites.playerTex, frame * 16, 0, facingLeft ? -16 : 16, PLAYER_H, feet.x - size / 2, feet.y - h + bob, size, h);
     g.rect(Math.trunc(feet.x - size * 0.4), Math.trunc(feet.y) + 4, Math.trunc(size * 0.8), 6, C(0, 0, 0, 90));
   }
 
@@ -495,12 +499,12 @@ export class App {
     UI.text(`V${VERSION}  WEB EDITION`, V(K.ScreenW - 24, K.ScreenH - 30), 16, withAlpha(DIM, 0.6), Align.Right);
   }
 
-  header(title, sub) {
+  header(title, sub, backTo = 'menu') {
     const g = this.g;
     g.rect(0, 0, K.ScreenW, K.ScreenH, C(10, 11, 16, 215));
     UI.textShadow(title, V(66, 40), 46, PP.CreamHi);
     UI.text(sub, V(68, 98), 16, DIM);
-    if (UI.smallButton('back', R(K.ScreenW - 66 - 150, 44, 150, 44), 'BACK')) this.go(() => this.setScreen('menu'));
+    if (UI.smallButton('back', R(K.ScreenW - 66 - 150, 44, 150, 44), 'BACK')) this.go(() => this.setScreen(backTo));
   }
 
   drawMyMaps() {
@@ -576,7 +580,7 @@ export class App {
   drawOptions() {
     const g = this.g, s = this.save;
     this.header('OPTIONS', 'AUDIO, VISUALS AND DISPLAY');
-    const panel = R(K.ScreenW / 2 - 300, 128, 600, 520);
+    const panel = R(K.ScreenW / 2 - 300, 118, 600, 596);
     UI.panel(panel);
     const x = panel.x + 40, w = panel.w - 80;
     let y = panel.y + 48;
@@ -606,9 +610,72 @@ export class App {
     const oc = UI.toggle('opt_oneclick', R(x - 10, y, w + 20, 54), 'ONE-BUTTON PORTALS', s.oneClickPortals);
     if (oc !== null) { s.oneClickPortals = oc; changed = true; }
     UI.text(s.oneClickPortals ? 'LEFT CLICK ALTERNATES BLUE AND ORANGE' : 'LEFT CLICK = BLUE   RIGHT CLICK = ORANGE', V(x, y + 58), 16, DIM);
-    y += 90;
+    y += 88;
+    if (UI.button('opt_char', R(x - 10, y, w + 20, 72), 'CUSTOMISE CHARACTER', { accent: PP.OrangeRamp[2], sub: 'COLOURS, HATS, FACES AND OUTFITS' })) this.go(() => this.setScreen('character'));
+    y += 84;
     UI.text(`VERSION ${VERSION}   WEB EDITION`, V(x, y), 16, DIM);
     if (changed && !UI.mouseDown) s.store();
+  }
+
+  // ---------------------------------------------------------------- character customiser
+
+  setLook(patch) {
+    this.save.look = cleanLook({ ...this.save.look, ...patch });
+    Sprites.setLook(this.save.look);
+    this.save.store();
+  }
+
+  drawCharacter() {
+    const g = this.g, look = this.save.look;
+    this.header('CHARACTER', 'COLOURS, HATS, FACES AND OUTFITS', 'options');
+    // preview
+    const pv = R(66, 136, 440, 520);
+    UI.panel(pv);
+    g.additive = true;
+    g.circleGrad(pv.x + pv.w / 2, pv.y + 300, 190, withAlpha(PP.BlueRamp[2], 70 / 255), withAlpha(PP.BlueRamp[2], 0));
+    g.additive = false;
+    this.mascot(V(pv.x + pv.w / 2, pv.y + 400), 8);
+    UI.text(COLORS[look.color].name, V(pv.x + pv.w / 2, pv.y + 478), 30, PP.CreamHi, Align.Center);
+
+    // controls
+    const cx = 530, cw = 684;
+    UI.panel(R(cx, 136, cw, 520));
+    const x = cx + 40, w = cw - 80;
+    let y = 160;
+    UI.text('COLOUR', V(x, y), 16, DIM);
+    COLORS.forEach((c, i) => {
+      const r = R(x + i * 76, y + 28, 64, 64);
+      const over = contains(r, UI.mouse);
+      g.rect(r.x + 2, r.y + 3, r.w, r.h, C(0, 0, 0, 100));
+      g.rectR(r, c.body);
+      g.rect(r.x, r.y, r.w, 8, c.hi);
+      g.rect(r.x, r.y + r.h - 8, r.w, 8, c.lo);
+      g.rectLines(r, look.color === i ? 4 : 2, look.color === i ? WHITE : over ? PP.BlueRamp[2] : c.out);
+      if (over && UI.click) { UI.onClick?.(); this.setLook({ color: i }); }
+    });
+    y += 116;
+    const selector = (id, label, list, key) => {
+      const n = list.length, cur = look[key];
+      UI.text(label, V(x, y), 16, DIM);
+      UI.text(`${cur + 1}/${n}`, V(x + w, y), 16, DIM, Align.Right);
+      const nameR = R(x + 76, y + 24, w - 152, 52);
+      g.rectR(nameR, C(24, 27, 36));
+      g.rectLines(nameR, 2, PANEL_EDGE_C);
+      UI.text(list[cur], V(nameR.x + nameR.w / 2, nameR.y + nameR.h / 2), 30, PP.CreamHi, Align.Center);
+      if (UI.smallButton(id + '_l', R(x, y + 24, 64, 52), '<')) this.setLook({ [key]: (cur + n - 1) % n });
+      if (UI.smallButton(id + '_r', R(x + w - 64, y + 24, 64, 52), '>')) this.setLook({ [key]: (cur + 1) % n });
+      y += 96;
+    };
+    selector('hat', 'HAT', HATS.map((h) => h.name), 'hat');
+    selector('face', 'FACE', FACE_NAMES, 'face');
+    selector('outfit', 'OUTFIT', OUTFIT_NAMES, 'outfit');
+    const bw = (w - 24) / 3, by = 584;
+    if (UI.smallButton('look_rand', R(x, by, bw, 52), 'RANDOM', PP.Exit)) {
+      const rnd = (n) => Math.floor(Math.random() * n);
+      this.setLook({ color: rnd(COLORS.length), hat: rnd(HATS.length), face: rnd(FACE_NAMES.length), outfit: rnd(OUTFIT_NAMES.length) });
+    }
+    if (UI.smallButton('look_reset', R(x + bw + 12, by, bw, 52), 'RESET')) this.setLook(DEFAULT_LOOK);
+    if (UI.smallButton('look_done', R(x + 2 * (bw + 12), by, bw, 52), 'DONE', PP.OrangeRamp[2])) this.go(() => this.setScreen('options'));
   }
 
   drawControls() {
@@ -653,6 +720,14 @@ export class App {
 
   hudNumber() { return this.customMode ? 'MY' : this.randomMode ? String(this.streak + 1).padStart(2, '0') : String(this.level + 1).padStart(2, '0'); }
 
+  /** UI that sits over the game fades to 20% while the cursor is over it, so it never hides the action. */
+  hudAlpha(key, r) {
+    const hot = Input.inside && contains({ x: r.x - 10, y: r.y - 10, w: r.w + 20, h: r.h + 20 }, UI.mouse) && this.screen === 'play' && !this.paused;
+    const v = approach(this.fades[key] ?? 1, hot ? 0.2 : 1, this.dt * 6);
+    this.fades[key] = v;
+    return v;
+  }
+
   drawHud() {
     const g = this.g, w = this.world, def = w.def;
     const num = this.hudNumber();
@@ -662,13 +737,16 @@ export class App {
     const nameX = 34 + numM.x + 24;
     const tagW = Math.max(UI.measure(name, 30).x, UI.measure(label, 16).x) + nameX + 24 - 16;
     const tag = R(16, 14, tagW, 74);
+    g.opacity = this.hudAlpha('tag', tag);
     UI.panel(tag, 0.92);
     g.rect(tag.x + 2, tag.y + 2, 4, tag.h - 4, this.customMode ? PP.BlueRamp[3] : this.randomMode ? PP.Exit : PP.OrangeRamp[2]);
     UI.text(num, V(34, 30), 46, PP.CreamHi, Align.Left, true);
     UI.text(label, V(nameX, 26), 16, DIM);
     UI.text(name, V(nameX, 48), 30, PP.CreamHi, Align.Left, true);
+    g.opacity = 1;
 
     const tr = R(K.ScreenW - 16 - 250, 14, 250, 74);
+    g.opacity = this.hudAlpha('time', tr);
     UI.panel(tr, 0.92);
     UI.text(UI.formatTime(Math.max(this.levelTime, 0.001)), V(tr.x + tr.w - 18, tr.y + 14), 30, PP.CreamHi, Align.Right, true);
     UI.text(`DEATHS ${this.deaths}`, V(tr.x + tr.w - 18, tr.y + 50), 16, DIM, Align.Right);
@@ -680,11 +758,15 @@ export class App {
       g.rect(cx, cy - 10, 10, 20, usable ? col : C(70, 76, 86));
       if (!placed) g.rect(cx + 2, cy - 8, 6, 16, C(18, 20, 27));
     }
+    g.opacity = 1;
 
     if (this.showIntro && this.stateT < 3.2) {
       const t = this.stateT;
       const slide = t < 0.4 ? easeOutCubic(t / 0.4) : t > 2.8 ? 1 - easeOutCubic((t - 2.8) / 0.4) : 1;
-      this.drawChamberCard(V(K.ScreenW / 2 - 220, roundEven(200 - (1 - slide) * 24)), slide);
+      const cpos = V(K.ScreenW / 2 - 220, roundEven(200 - (1 - slide) * 24));
+      g.opacity = this.hudAlpha('card', R(cpos.x, cpos.y, 440, 250));
+      this.drawChamberCard(cpos, slide);
+      g.opacity = 1;
     }
 
     const hints = this.save.oneClickPortals ? def.hints.map((h) => h.replace('RIGHT MOUSE fires orange.', 'Click again for orange.')) : def.hints;
@@ -693,11 +775,15 @@ export class App {
       if (show > 0.01) {
         const maxW = Math.max(...hints.map((h) => UI.measure(h, 16).x));
         const hr = R(K.ScreenW / 2 - maxW / 2 - 30, 104, maxW + 60, hints.length * 28 + 26);
+        g.opacity = this.hudAlpha('hints', hr);
         UI.panel(hr, show);
         g.rect(hr.x + 2, hr.y + 2, 4, hr.h - 4, withAlpha(PP.BlueRamp[2], show));
         hints.forEach((h, i) => UI.text(h, V(K.ScreenW / 2 + 4, hr.y + 27 + i * 28), 16, withAlpha(PP.Cream, show), Align.Center));
+        g.opacity = 1;
       } else if (!this.hintsOn || this.hintT > this.hintEnd) {
+        g.opacity = this.hudAlpha('foot', R(20, K.ScreenH - 30, 400, 16));
         UI.text('H HINTS   R RESTART   ESC PAUSE', V(20, K.ScreenH - 30), 16, withAlpha(DIM, 0.6));
+        g.opacity = 1;
       }
     }
 

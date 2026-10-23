@@ -5,4 +5,4 @@ dist/
 .idea/
 *.user
 .DS_Store
-web-build/test/
+/test/

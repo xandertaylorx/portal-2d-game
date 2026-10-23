@@ -8,7 +8,7 @@
 import {
   K, C, withAlpha, mix, clamp, clamp01, hash, easeOutBack, roundEven, Portal, PortalColor, HALF_LEN, overlaps, V,
 } from './core.js';
-import { PP, Sprites, LevelArt, PORTAL_FRAMES } from './art.js';
+import { PP, Sprites, LevelArt, PORTAL_FRAMES, PLAYER_H } from './art.js';
 import { PixelFont, makeCanvas } from './gfx.js';
 import { World, PKind, GunMode } from './world.js';
 
@@ -354,11 +354,11 @@ export class Renderer {
     const feet = snapV(V(p.pos.x, p.pos.y + p.half.y));
     const f = p.facing;
     const sw = f > 0 ? 16 : -16;
-    const dx = feet.x - 16, dy = feet.y - 32 + 2;
-    g.tex(Sprites.playerTex, frame * 16, 0, sw, 16, dx, dy, 32, 32);
+    const dx = feet.x - 16, dy = feet.y - PLAYER_H * 2 + 2;
+    g.tex(Sprites.playerTex, frame * 16, 0, sw, PLAYER_H, dx, dy, 32, PLAYER_H * 2);
     if (p.teleportFlash > 0.05) {
       g.additive = true;
-      g.tex(Sprites.playerTex, frame * 16, 0, sw, 16, dx, dy, 32, 32, 180 / 255 * p.teleportFlash);
+      g.tex(Sprites.playerTex, frame * 16, 0, sw, PLAYER_H, dx, dy, 32, PLAYER_H * 2, 180 / 255 * p.teleportFlash);
       g.additive = false;
     }
 

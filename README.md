@@ -3,15 +3,15 @@
 </p>
 
 <p align="center">
-  <b>A pixel-art, side-scrolling portal puzzler, written from scratch in C#.</b><br>
+  <b>A pixel-art, side-scrolling portal puzzler that runs in your browser, written from scratch.</b><br>
   50 test chambers that get steadily harder, an endless procedurally generated mode,
   and portals you can actually see through.
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.8.1-ff8a1f?style=flat-square">
-  <img alt=".NET" src="https://img.shields.io/badge/.NET-10-3fa7ff?style=flat-square">
-  <img alt="platforms" src="https://img.shields.io/badge/platforms-Web%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux-5ee08a?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.0-ff8a1f?style=flat-square">
+  <img alt="JavaScript" src="https://img.shields.io/badge/plain-JavaScript-3fa7ff?style=flat-square">
+  <img alt="platforms" src="https://img.shields.io/badge/play-in%20your%20browser-5ee08a?style=flat-square">
   <img alt="license" src="https://img.shields.io/badge/license-PolyForm%20Strict-d97757?style=flat-square">
 </p>
 
@@ -46,7 +46,10 @@
   parallax, ripples and a dithered pixel rim.
 - **Everything is generated in code**: every sprite, tile, the bitmap font and every sound effect. The game ships no
   art or audio files.
-- **One-click updates**: when a new version is out, the main menu offers to download it and restarts the game into it.
+- **Character customiser**: pick a colour, a hat, a face accessory and an outfit in OPTIONS. Your look follows you
+  through every chamber, and through the portals.
+- **No install**: it runs in any modern browser. A fullscreen button sits in the corner, and the HUD fades out of the
+  way when your cursor goes near it.
 - Coyote time, jump buffering, an aim preview that shows where a portal will land, best times, and a pause menu
   with options for volume, screen shake, portal lenses and fullscreen.
 
@@ -57,29 +60,16 @@
   <img src="docs/media/complete.png" width="49%" alt="Chamber complete">
 </p>
 
-## Play in your browser
+## Play
 
-**[xandertaylorx.github.io/portal-2d-game](https://xandertaylorx.github.io/portal-2d-game/)**: the whole game, including
-the map builder, Random Test and featured maps. It needs a keyboard and mouse, so open it on a computer. Progress and
-your maps are saved in the browser. Maps are shared as links that open straight into the web game. The map codes are
-the same as the desktop game's, so a map made on either one plays on the other.
+**[xandertaylorx.github.io/portal-2d-game](https://xandertaylorx.github.io/portal-2d-game/)**: the whole game,
+including the map builder, Random Test and featured maps. It needs a keyboard and mouse, so open it on a computer.
+Progress, your maps and your character are saved in the browser. Maps are shared as links that open straight into the
+game.
 
-## Download & play
-
-Prefer a native app? Grab the latest build from the **[Releases page](https://github.com/xandertaylorx/portal-2d-game/releases/latest)**:
-
-| Platform | File |
-|---|---|
-| macOS (Apple Silicon) | `Portal2D-macOS-arm64-app.zip` |
-| macOS (Intel) | `Portal2D-macOS-x64-app.zip` |
-| Windows | `Portal2D-win-x64.zip` (run `Portal2D.exe`) |
-| Linux | `Portal2D-linux-x64.zip` (run `./Portal2D`) |
-
-> **macOS:** the app is signed but not notarised by Apple. The first time you open it, macOS warns that it can't
-> verify the developer. Click **Done**, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
-> Or run `xattr -cr "/Applications/Portal 2D.app"` once, using wherever you put the app.
-
-After that, the game checks for updates when it starts. You can turn this off in Options.
+> The original C# desktop version is frozen in [`OLD-DESKTOP/`](OLD-DESKTOP/). Its builds are still on the
+> [Releases page](https://github.com/xandertaylorx/portal-2d-game/releases) but get no further updates. Map codes are
+> the same in both, so a map made in either plays in the other.
 
 ### Controls
 
@@ -101,7 +91,7 @@ After that, the game checks for updates when it starts. You can turn this off in
 A portal sits on the face of two white tiles and has a centre, an outward normal and an in-plane "up" axis.
 Going from portal A to portal B sends `normal(A) → -normal(B)` and `up(A) → up(B)`. Wall portals keep world-up, so
 you never come out upside down. Floor and ceiling portals keep world-right, so the direction you were moving is kept.
-That single affine map (`Core/Portal.cs`) drives:
+That single affine map (`Portal` in `src/core.js`) drives:
 
 - **Teleporting:** position *and velocity* go through the map, which is where flings come from.
 - **Sinking in:** the tiles behind a linked portal stop being solid for anything lined up with the opening.
@@ -110,70 +100,44 @@ That single affine map (`Core/Portal.cs`) drives:
   of one portal lines up behind the other.
 
 ### Portal lenses
-When both portals exist, each one swells into an oval lens. A shader samples the off-screen view behind the
+When both portals exist, each one swells into an oval lens. A per-pixel pass samples the off-screen view behind the
 portal, so it shows what is in front of the partner portal. It squeezes that view into the lens with a fish-eye
 curve, shifts it with parallax based on where you stand, and adds ripples, a swirl and a dithered, sparkling rim.
 Characters passing through are redrawn on the room side, so they never vanish behind the lens.
 
 ### Pixel-art pipeline
 The game renders to a 640×360 canvas (16 px tiles), scaled up with nearest-neighbour filtering by a whole number.
-Tiles and sprites are painted pixel by pixel into CPU buffers (`Render/Pix.cs`). Each level's back wall and solid
+Tiles and sprites are painted pixel by pixel into CPU buffers (`Pix` in `src/gfx.js`). Each level's back wall and solid
 tiles are baked into two textures, with auto-tiled outlines, rounded corners, panel seams, ambient occlusion and a
 painted chamber number.
 
 ### Every level is proven solvable
-`Testing/Bot.cs` drives the real physics with scripted inputs. Every handcrafted chamber has a reference solution,
-and `--test` plays all of them headlessly. In Random Test, each room archetype writes out the inputs that solve it.
+The C# bots in `OLD-DESKTOP/src/Portal2D/Testing/` drive the real physics with scripted inputs. Every handcrafted chamber has a reference solution,
+and `--test` plays all of them headlessly. `tests/replay.mjs` replays those solutions through the JavaScript physics. In Random Test, each room archetype writes out the inputs that solve it.
 A generated level is only handed to you after the bot has finished it; otherwise the next sub-seed is tried.
 
 <p align="center"><img src="docs/media/sprites.png" width="70%" alt="Sprites"></p>
 
-## Building from source
+## Running and changing it
 
-Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download).
-
-```bash
-dotnet run --project src/Portal2D -c Release          # play
-dotnet run --project src/Portal2D -- --test           # verify every chamber is solvable
-dotnet run --project src/Portal2D -- --procgen 50     # generate + verify 50 random chambers
-dotnet run --project src/Portal2D -- --preview 9 l9.png   # render a level to PNG without a window
-./scripts/shots.sh shots                              # real in-game screenshots
-./scripts/make-mac-app.sh                             # local macOS .app in dist/
-```
-
-### The web build
-
-`web-build/` is the same game in plain JavaScript on a canvas (no bundler, no dependencies). The physics is a direct
-port of `Game/World.cs`, and a test replays the C# reference solutions through it to prove they still win frame for
-frame. The levels come straight from the C# game: `--export-web` writes every chamber and a pool of verified Random
-Test chambers to `web-build/data/`, so the web game never has to re-implement the generators or the bots.
+No build step and no dependencies: it is plain JavaScript modules on a 640×360 canvas.
 
 ```bash
-dotnet run --project src/Portal2D -c Release -- --export-web web-build/data   # after changing any chamber
-node web-build/tests/replay.mjs                                              # JS physics vs the C# solutions
-python3 -m http.server -d web-build 8000                                     # play it at localhost:8000
+python3 -m http.server 8000          # then open http://localhost:8000
+node tests/replay.mjs                # replay the reference solutions through the JS physics
+node tools/make-favicon.mjs          # regenerate favicon.png from the hero sprite
 ```
 
-A push to `main` that touches `web-build/` is deployed to GitHub Pages by `.github/workflows/pages.yml`.
-
-### Releasing an update
-
-1. Add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md) and commit.
-2. Run `./scripts/release.sh x.y.z`.
-
-The script runs the tests, stamps the version, builds macOS, Windows and Linux packages, tags the source, and
-publishes a GitHub release on this repo. Running games pick it up and offer the update.
-
-### Project layout
+`?level=N` and `?screen=select|options|controls|character|mymaps|editor` deep-link to a chamber or screen.
+A push to `main` that touches the game files is deployed to GitHub Pages by `.github/workflows/pages.yml`.
 
 ```
-src/Portal2D/
-  Core/      math helpers, the portal transform
-  Game/      simulation and physics, levels, procedural generator, audio synth, save data, updater, screens
-  Render/    pixel buffers, sprite + tile painters, bitmap font, renderer, portal-lens shader
-  UI/        immediate-mode pixel UI, mechanic icons
-  Testing/   input bot, reference solutions, test runner, web export
-web-build/   the browser version (src/ game code, data/ exported levels, tests/ replay test)
+index.html   page shell, fullscreen button
+src/         game code: world.js (physics), render.js (scene + portal lenses), app.js (screens), editor.js (map builder),
+             art.js (sprites, tiles, character customiser), audio.js (synthesised sound), maps.js (saves, share codes)
+data/        the 53 chambers + a pool of Random Test chambers (JSON)
+tests/       replay.mjs
+OLD-DESKTOP/ the original C# version, which also generated data/ (see its README)
 ```
 
 ## License

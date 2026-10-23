@@ -2,7 +2,7 @@
 // localStorage standing in for the AppData folder. Share codes are byte-compatible with the desktop game
 // (P2D1: + base64 of gzipped JSON), so a code made on either version plays on the other.
 import { clamp } from './core.js';
-import { THEME_COUNT } from './art.js';
+import { THEME_COUNT, DEFAULT_LOOK, cleanLook } from './art.js';
 
 const SAVE_KEY = 'portal2d.save.v1';
 const MAPS_KEY = 'portal2d.maps.v1';
@@ -19,6 +19,7 @@ export class SaveData {
     this.cones = true; this.shake = true; this.fullscreen = false;
     this.totalDeaths = 0; this.randomBestStreak = 0; this.randomCleared = 0;
     this.oneClickPortals = false; this.editorHelpSeen = false;
+    this.look = { ...DEFAULT_LOOK };   // character customiser: colour, hat, face, outfit
     this.best = [];
     this.names = [];
   }
@@ -32,6 +33,7 @@ export class SaveData {
         for (const k of Object.keys(d)) if (k !== 'best' && k !== 'names' && o[k] !== undefined && typeof o[k] === typeof d[k]) d[k] = o[k];
       }
     } catch { /* a corrupt save is just a fresh start */ }
+    d.look = cleanLook(d.look);
     d.names = names;
     d.best = names.map((n) => d.times[n] || 0);
     return d;

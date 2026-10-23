@@ -213,7 +213,7 @@ export const Icons = {
   box(g, x, y, size, col, filled) {
     const ctx = g.ctx;
     g._local();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = g.opacity;
     ctx.beginPath();
     ctx.roundRect(x, y, size, size, size * 0.1);
     if (filled) { ctx.fillStyle = col.css; ctx.fill(); }
@@ -224,7 +224,7 @@ export const Icons = {
   glyph(g, m, c, s, col) {
     const ctx = g.ctx;
     g._local();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = g.opacity;
     ctx.strokeStyle = col.css; ctx.fillStyle = col.css; ctx.lineWidth = 1.5;
     const line = (a, b, w = 1.5) => { ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); };
     switch (m) {

@@ -167,6 +167,7 @@ export class Gfx {
     this.setTarget(canvas);
     this.m = [1, 0, 0, 1, 0, 0];
     this.stack = [];
+    this.opacity = 1;      // multiplies everything drawn (used to fade HUD panels under the cursor)
   }
   setTarget(canvas) {
     this.canvas = canvas;
@@ -211,7 +212,7 @@ export class Gfx {
     if (x1 <= x0 || y1 <= y0) return;
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = this.opacity;
     ctx.fillStyle = color.css;
     ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
   }
@@ -228,7 +229,7 @@ export class Gfx {
     this._local();
     const g = ctx.createLinearGradient(0, y, 0, y + h);
     g.addColorStop(0, top.css); g.addColorStop(1, bottom.css);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = this.opacity;
     ctx.fillStyle = g;
     ctx.fillRect(x, y, w, h);
     this._reset();
@@ -238,7 +239,7 @@ export class Gfx {
     this._local();
     const g = ctx.createLinearGradient(x, 0, x + w, 0);
     g.addColorStop(0, left.css); g.addColorStop(1, right.css);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = this.opacity;
     ctx.fillStyle = g;
     ctx.fillRect(x, y, w, h);
     this._reset();
@@ -249,7 +250,7 @@ export class Gfx {
     this._local();
     const g = ctx.createLinearGradient(0, y0, 0, y1);
     g.addColorStop(0, near.css); g.addColorStop(1, far.css);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = this.opacity;
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
@@ -264,7 +265,7 @@ export class Gfx {
     this._local();
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
     g.addColorStop(0, inner.css); g.addColorStop(1, outer.css);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = this.opacity;
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -274,14 +275,14 @@ export class Gfx {
   circle(cx, cy, r, color) {
     const ctx = this.ctx;
     this._local();
-    ctx.globalAlpha = 1; ctx.fillStyle = color.css;
+    ctx.globalAlpha = this.opacity; ctx.fillStyle = color.css;
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
     this._reset();
   }
   line(a, b, thick, color) {
     const ctx = this.ctx;
     this._local();
-    ctx.globalAlpha = 1; ctx.strokeStyle = color.css; ctx.lineWidth = thick;
+    ctx.globalAlpha = this.opacity; ctx.strokeStyle = color.css; ctx.lineWidth = thick;
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     this._reset();
   }
@@ -291,7 +292,7 @@ export class Gfx {
     const ctx = this.ctx, m = this.m;
     const flipX = sw < 0, flipY = sh < 0;
     sw = Math.abs(sw); sh = Math.abs(sh);
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = alpha * this.opacity;
     if (m[1] === 0 && m[2] === 0) {
       const ax = m[0] * dx + m[4], ay = m[3] * dy + m[5], bx = m[0] * (dx + dw) + m[4], by = m[3] * (dy + dh) + m[5];
       const x0 = Math.ceil(Math.min(ax, bx) - 0.5 - 1e-6), x1 = Math.ceil(Math.max(ax, bx) - 0.5 - 1e-6);
@@ -308,7 +309,7 @@ export class Gfx {
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = this.opacity;
   }
   /** Clip to a canvas-pixel rectangle until unclip(). */
   clip(x, y, w, h) {

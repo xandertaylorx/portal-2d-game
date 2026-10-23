@@ -760,7 +760,7 @@ function toolIcon(g, t, group, r, a) {
       break;
     }
     case 'start':
-      g.tex(Sprites.playerTex, 0, 0, 16, 16, r.x, r.y, r.w, r.h, a);
+      g.tex(Sprites.playerTex, 0, 4, 16, 16, r.x, r.y, r.w, r.h, a);
       break;
     case 'exit':
       P(3, 0, 10, 16, PP.Exit); P(5, 2, 6, 14, C(18, 52, 36)); P(9, 9, 1, 2, PP.Exit); P(3, 0, 10, 1, withAlpha(WHITE, 0.6));

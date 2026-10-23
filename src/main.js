@@ -7,13 +7,19 @@ const canvas = document.getElementById('game');
 const status = document.getElementById('status');
 
 function fit() {
-  // fill the browser window (letterboxed to 16:9); the canvas is pixelated so the art stays crisp
   const s = Math.min(window.innerWidth / 640, window.innerHeight / 360);
-  canvas.style.width = `${640 * s}px`;
-  canvas.style.height = `${360 * s}px`;
+  // windowed: a crisp whole-number pixel scale; fullscreen: fill the whole screen (letterboxed to 16:9)
+  const px = document.fullscreenElement || s < 1 ? s : Math.floor(s);
+  canvas.style.width = `${640 * px}px`;
+  canvas.style.height = `${360 * px}px`;
 }
 window.addEventListener('resize', fit);
+document.addEventListener('fullscreenchange', fit);
 fit();
+
+const fsButton = document.getElementById('fs');
+if (!document.fullscreenEnabled) fsButton.remove();
+else fsButton.addEventListener('click', () => { window.portal2d?.toggleFullscreen(); fsButton.blur(); });
 
 async function boot() {
   let levels;
@@ -42,7 +48,7 @@ async function boot() {
   requestAnimationFrame(loop);
 }
 
-/** ?level=N opens a chamber directly; ?screen=select|options|controls|mymaps|editor opens that screen. */
+/** ?level=N opens a chamber directly; ?screen=select|options|controls|character|mymaps|editor opens that screen. */
 function jumpFromUrl(app) {
   const q = new URLSearchParams(location.search);
   const skip = () => { app.fade = 0; app.fadeDir = 0; };
@@ -52,7 +58,7 @@ function jumpFromUrl(app) {
     app.loadLevel(true); app.setScreen('play'); skip();
   } else if (q.has('screen')) {
     const s = q.get('screen');
-    if (['select', 'options', 'controls', 'mymaps'].includes(s)) { if (s === 'mymaps') app.library.reload(); app.setScreen(s); skip(); }
+    if (['select', 'options', 'controls', 'character', 'mymaps'].includes(s)) { if (s === 'mymaps') app.library.reload(); app.setScreen(s); skip(); }
     else if (s === 'editor') {
       const m = CustomMap.blank('DEMO');
       app.openEditor(m); app.editor.persist = false; app.editor.demo(); app.editor.showHelp = q.has('help'); skip();

@@ -26,9 +26,9 @@ export function levelPreview(w) {
   }
   for (const c of w.cubes) o.draw(Sprites.cube, Math.trunc(c.pos.x * K.Px) - 8, Math.trunc(c.pos.y * K.Px) - 8);
   if (w.player) {
-    const frame = new Pix(16, 16);
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) frame.set(x, y, Sprites.playerSheet.get(x, y));
-    o.draw(frame, Math.trunc(w.player.pos.x * K.Px) - 8, Math.trunc((w.player.pos.y + w.player.half.y) * K.Px) - 16);
+    const frame = new Pix(16, 20);
+    for (let y = 0; y < 20; y++) for (let x = 0; x < 16; x++) frame.set(x, y, Sprites.playerSheet.get(x, y));
+    o.draw(frame, Math.trunc(w.player.pos.x * K.Px) - 8, Math.trunc((w.player.pos.y + w.player.half.y) * K.Px) - 20);
   }
   o.draw(art.front, 0, 0);
   for (let ty = 0; ty < w.h; ty++) for (let tx = 0; tx < w.w; tx++) {

@@ -5,9 +5,9 @@ using Portal2D.Game;
 namespace Portal2D.Testing;
 
 /// <summary>
-/// Dumps every chamber (and a pool of verified Random Test chambers) to JSON for the browser version in web-build/.
+/// Dumps every chamber (and a pool of verified Random Test chambers) to JSON for the browser version at the repo root.
 /// The web game never has to re-implement the level generators or the bots: it plays the exact verified maps.
-///   Portal2D --export-web web-build/data
+///   dotnet run --project OLD-DESKTOP/src/Portal2D -c Release -- --export-web data
 /// </summary>
 public static class WebExport
 {

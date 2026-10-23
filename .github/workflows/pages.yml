@@ -1,11 +1,14 @@
 name: Deploy web build
 
-# Publishes web-build/ to GitHub Pages: https://xandertaylorx.github.io/portal-2d-game/
+# Publishes the game (index.html, favicon, src/, data/) to GitHub Pages: https://xandertaylorx.github.io/portal-2d-game/
 on:
   push:
     branches: [main]
     paths:
-      - 'web-build/**'
+      - 'index.html'
+      - 'favicon.png'
+      - 'src/**'
+      - 'data/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -29,7 +32,7 @@ jobs:
       - name: Stage the site (game only, no tests)
         run: |
           mkdir _site
-          cp -r web-build/index.html web-build/src web-build/data _site/
+          cp -r index.html favicon.png src data _site/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

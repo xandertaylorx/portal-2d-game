@@ -23,13 +23,79 @@ export const PP = {
 export const PLAYER_FRAMES = 8;
 export const PORTAL_FRAMES = 6;
 
-function buildPlayerSheet() {
-  const sheet = new Pix(16 * PLAYER_FRAMES, 16);
+// ------------------------------------------------------------------ the hero and the character customiser
+
+export const PLAYER_H = 20;       // frame height: 4 extra rows on top so hats fit
+const Y0 = 4;
+
+const pal = (body, hi, lo, out, eye = C(26, 16, 16)) => ({ body: C(...body), hi: C(...hi), lo: C(...lo), out: C(...out), eye });
+export const COLORS = [
+  { name: 'TERRACOTTA', ...pal([217, 119, 87], [242, 165, 132], [176, 92, 62], [48, 20, 13]) },
+  { name: 'SKY', ...pal([86, 160, 230], [150, 205, 250], [50, 110, 185], [14, 30, 60]) },
+  { name: 'MINT', ...pal([96, 200, 140], [160, 238, 186], [56, 150, 98], [12, 44, 28]) },
+  { name: 'GRAPE', ...pal([160, 110, 220], [205, 165, 248], [112, 70, 170], [34, 16, 56]) },
+  { name: 'BUBBLEGUM', ...pal([240, 130, 170], [255, 186, 212], [200, 88, 130], [60, 18, 36]) },
+  { name: 'SUNNY', ...pal([240, 200, 70], [255, 232, 140], [200, 155, 36], [60, 40, 8]) },
+  { name: 'SNOW', ...pal([226, 230, 238], [255, 255, 255], [170, 178, 196], [40, 46, 64]) },
+  { name: 'MIDNIGHT', ...pal([70, 78, 110], [112, 122, 164], [44, 50, 78], [8, 10, 22], C(240, 244, 255)) },
+];
+
+const rc = (r, g, b) => C(r, g, b);
+// hats: ops are [x, y, w, h, colour] with y relative to the top row of the body (negative = above the head)
+const RED = rc(214, 64, 64), RED_HI = rc(244, 120, 110), RED_LO = rc(150, 36, 44), BLACK = rc(34, 34, 46), GREY = rc(90, 92, 110);
+const GOLD = rc(246, 196, 60), GOLD_HI = rc(255, 232, 140), GOLD_LO = rc(196, 140, 30), WHITE = rc(250, 250, 252), CREAM = rc(226, 228, 236);
+const BLUE = rc(60, 110, 200), BLUE_HI = rc(120, 170, 240), BLUE_LO = rc(34, 66, 140);
+const PURPLE = rc(110, 70, 190), PURPLE_HI = rc(160, 120, 235), PURPLE_LO = rc(70, 40, 130);
+const BROWN = rc(150, 96, 54), BROWN_HI = rc(190, 130, 80), BROWN_LO = rc(100, 60, 32);
+const PINK = rc(244, 110, 170), TEAL = rc(60, 200, 190), GREEN = rc(80, 190, 90);
+
+export const HATS = [
+  { name: 'NONE', ops: [] },
+  { name: 'CAP', ops: [[4, -3, 8, 3, RED], [5, -3, 4, 1, RED_HI], [4, -1, 8, 1, RED_LO], [11, -1, 4, 1, RED_LO], [8, -2, 1, 1, WHITE]] },
+  { name: 'TOP HAT', ops: [[3, -1, 10, 1, BLACK], [5, -6, 6, 5, BLACK], [5, -2, 6, 1, RED], [6, -5, 1, 3, GREY]] },
+  { name: 'CROWN', ops: [[4, -2, 8, 2, GOLD], [4, -4, 2, 2, GOLD], [7, -4, 2, 2, GOLD], [10, -4, 2, 2, GOLD], [4, -2, 8, 1, GOLD_HI], [4, -1, 8, 1, GOLD_LO], [7, -2, 2, 1, RED]] },
+  { name: 'PARTY HAT', ops: [[7, -6, 2, 1, GOLD], [7, -5, 2, 1, PINK], [6, -4, 4, 1, TEAL], [6, -3, 4, 1, PINK], [5, -2, 6, 1, TEAL], [5, -1, 6, 1, PINK]] },
+  { name: 'WIZARD HAT', ops: [[8, -7, 2, 1, PURPLE], [7, -6, 3, 1, PURPLE], [6, -5, 4, 1, PURPLE], [6, -4, 4, 1, PURPLE_HI], [5, -3, 6, 1, PURPLE], [4, -2, 8, 1, PURPLE], [2, -1, 12, 1, PURPLE_LO], [4, -2, 8, 1, GOLD], [7, -4, 1, 1, GOLD_HI]] },
+  { name: 'COWBOY HAT', ops: [[1, -1, 14, 1, BROWN], [1, -2, 2, 1, BROWN], [13, -2, 2, 1, BROWN], [4, -4, 8, 3, BROWN], [7, -5, 2, 1, BROWN], [4, -2, 8, 1, BROWN_LO], [5, -4, 2, 1, BROWN_HI]] },
+  { name: 'BEANIE', ops: [[7, -6, 2, 2, WHITE], [3, -4, 10, 3, BLUE], [4, -4, 4, 1, BLUE_HI], [3, -1, 10, 1, BLUE_LO], [3, -2, 10, 1, BLUE_HI]] },
+  { name: 'PROPELLER', ops: [[4, -2, 8, 2, BLUE], [4, -2, 4, 2, RED], [5, -2, 2, 1, RED_HI], [7, -3, 2, 1, GREY], [3, -4, 10, 1, GOLD], [3, -4, 4, 1, GOLD_HI]] },
+  { name: 'CHEF HAT', ops: [[5, -6, 6, 1, WHITE], [4, -5, 8, 4, WHITE], [4, -1, 8, 1, CREAM], [6, -4, 1, 2, CREAM], [9, -3, 1, 2, CREAM], [4, -5, 1, 1, CLEAR]] },
+  { name: 'HALO', ops: [[5, -6, 6, 1, GOLD_HI], [4, -5, 1, 2, GOLD], [11, -5, 1, 2, GOLD], [5, -3, 6, 1, GOLD_LO]] },
+];
+
+const FACES = ['NONE', 'SHADES', 'GLASSES', 'MUSTACHE', 'BLUSH'];
+const OUTFITS = ['NONE', 'SCARF', 'BOW TIE', 'TIE', 'STRIPES', 'CAPE'];
+export const FACE_NAMES = FACES;
+export const OUTFIT_NAMES = OUTFITS;
+export const DEFAULT_LOOK = { color: 0, hat: 0, face: 0, outfit: 0 };
+
+export function cleanLook(l) {
+  const n = (v, max) => (Number.isInteger(v) && v >= 0 && v < max ? v : 0);
+  l = l || {};
+  return { color: n(l.color, COLORS.length), hat: n(l.hat, HATS.length), face: n(l.face, FACES.length), outfit: n(l.outfit, OUTFITS.length) };
+}
+
+/** Frames: 0 idle, 1 blink, 2-5 walk, 6 jump, 7 fall. 16x20 each, facing right. */
+export function buildPlayerSheet(look = DEFAULT_LOOK) {
+  look = cleanLook(look);
+  const col = COLORS[look.color];
+  const sheet = new Pix(16 * PLAYER_FRAMES, PLAYER_H);
+  const light = col.body.r * 0.3 + col.body.g * 0.6 + col.body.b * 0.1 > 120;
   for (let f = 0; f < PLAYER_FRAMES; f++) {
-    const p = new Pix(16, 16);
+    const p = new Pix(16, PLAYER_H);
     const bob = f === 3 || f === 5 ? 1 : 0;           // body dips on passing frames
-    let top = 3 + bob, bottom = 11 + bob;
+    let top = 3 + bob + Y0, bottom = 11 + bob + Y0;
     if (f === 6) { top -= 1; bottom -= 1; }
+    const R = (x, y, w, h, c) => p.rect(x, top + y, w, h, c);
+
+    // cape hangs behind everything
+    if (look.outfit === 5) {
+      const wave = f === 6 ? -1 : f === 7 ? 1 : 0;
+      p.rect(0, top + 1, 3, bottom - top + 2, RED);
+      p.rect(0, top + 1, 1, bottom - top + 2, RED_LO);
+      p.rect(1 + wave, bottom + 1, 3, 2, RED_LO);
+      p.rect(1, top + 1, 1, 3, RED_HI);
+    }
 
     // legs first (body overlaps their tops)
     const legX = [3, 5, 10, 12];
@@ -39,29 +105,74 @@ function buildPlayerSheet() {
       if (f === 4 && (i === 1 || i === 3)) { len = 2; x += 1; }
       if (f === 6) len = 2;
       if (f === 7) { len = 3; x += i < 2 ? -1 : 1; }
-      p.rect(x, bottom + 1, 1, len, PP.BodyLo);
+      p.rect(x, bottom + 1, 1, len, col.lo);
     }
 
     // body
-    p.rect(2, top, 12, bottom - top + 1, PP.Body);
+    p.rect(2, top, 12, bottom - top + 1, col.body);
     p.set(2, top, CLEAR); p.set(13, top, CLEAR); p.set(2, bottom, CLEAR); p.set(13, bottom, CLEAR);
-    p.hLine(3, top, 10, PP.BodyHi);
-    p.vLine(2, top + 1, bottom - top - 1, PP.BodyHi);
-    p.hLine(3, bottom, 10, PP.BodyLo);
-    p.vLine(13, top + 1, bottom - top - 1, PP.BodyLo);
-    p.set(4, top + 1, PP.BodyHi);
+    p.hLine(3, top, 10, col.hi);
+    p.vLine(2, top + 1, bottom - top - 1, col.hi);
+    p.hLine(3, bottom, 10, col.lo);
+    p.vLine(13, top + 1, bottom - top - 1, col.lo);
+    p.set(4, top + 1, col.hi);
 
     // little claws on the sides
     const armY = f === 6 || f === 7 ? top + 1 : top + 4;
-    p.rect(0, armY, 2, 2, PP.Body);
-    p.set(0, armY + 1, PP.BodyLo);
-    p.rect(14, armY, 2, 2, PP.Body);
-    p.set(15, armY + 1, PP.BodyLo);
+    p.rect(0, armY, 2, 2, col.body);
+    p.set(0, armY + 1, col.lo);
+    p.rect(14, armY, 2, 2, col.body);
+    p.set(15, armY + 1, col.lo);
 
-    // eyes (looking right)
-    if (f === 1) { p.set(8, top + 4, PP.Eye); p.set(11, top + 4, PP.Eye); }
-    else { p.rect(8, top + 3, 1, 2, PP.Eye); p.rect(11, top + 3, 1, 2, PP.Eye); }
-    p.outline(PP.BodyOut);
+    // outfit (over the body)
+    switch (look.outfit) {
+      case 1: // scarf with a tail
+        R(2, 6, 12, 2, RED); R(3, 6, 10, 1, RED_HI); R(3, 7, 10, 1, RED_LO);
+        R(3, 8, 2, 2, RED); R(3, 9, 2, 1, RED_LO);
+        break;
+      case 2: // bow tie
+        R(7, 6, 2, 3, RED); R(8, 6, 1, 1, RED_HI); R(11, 6, 2, 3, RED); R(12, 6, 1, 1, RED_HI);
+        R(9, 7, 2, 2, RED_LO);
+        break;
+      case 3: // tie
+        R(9, 6, 3, 1, BLUE); R(10, 7, 2, 3, BLUE); R(10, 7, 1, 2, BLUE_HI); R(9, 6, 1, 1, BLUE_HI);
+        break;
+      case 4: { // sailor stripes
+        const sc = light ? BLUE_LO : WHITE;
+        R(3, 5, 10, 1, sc); R(3, 7, 10, 1, sc);
+        break;
+      }
+      default: break;
+    }
+
+    // face accessories
+    switch (look.face) {
+      case 1: // shades
+        R(7, 3, 6, 2, BLACK); R(8, 3, 1, 1, GREY); R(11, 3, 1, 1, GREY); R(3, 3, 4, 1, BLACK);
+        break;
+      case 2: // wire-frame glasses: the eyes show through the open frame
+        R(7, 2, 6, 1, BROWN_LO); R(7, 5, 6, 1, BROWN_LO); R(7, 3, 1, 2, BROWN_LO); R(12, 3, 1, 2, BROWN_LO); R(9, 3, 2, 1, BROWN_LO);
+        break;
+      case 3: // moustache
+        R(7, 6, 6, 1, BROWN_LO); R(7, 7, 2, 1, BROWN_LO); R(11, 7, 2, 1, BROWN_LO); R(8, 6, 4, 1, BROWN);
+        break;
+      case 4: // blush
+        R(6, 5, 2, 1, C(255, 130, 150)); R(11, 5, 2, 1, C(255, 130, 150));
+        break;
+      default: break;
+    }
+    // eyes (looking right); the glasses draw over the top when worn
+    const eyeCol = col.eye;
+    const hideEyes = look.face === 1;
+    if (!hideEyes) {
+      if (f === 1) { R(8, 4, 1, 1, eyeCol); R(11, 4, 1, 1, eyeCol); }
+      else { R(8, 3, 1, 2, eyeCol); R(11, 3, 1, 2, eyeCol); }
+    }
+
+    // hat
+    for (const [x, y, w, h, c] of HATS[look.hat].ops) R(x, y, w, h, c);
+
+    p.outline(col.out);
     sheet.draw(p, f * 16, 0);
   }
   return sheet;
@@ -146,13 +257,17 @@ function buildPortal(ramp, linked, vertical) {
 
 export const Sprites = {
   ready: false,
+  setLook(look) {
+    this.look = cleanLook(look);
+    this.playerSheet = buildPlayerSheet(this.look);
+    this.playerTex = this.playerSheet.toCanvas();
+  },
   load() {
     if (this.ready) return;
-    this.playerSheet = buildPlayerSheet();
+    this.setLook(DEFAULT_LOOK);
     this.cube = buildCube();
     this.exitDoor = buildExit();
     this.lamp = buildLamp();
-    this.playerTex = this.playerSheet.toCanvas();
     this.cubeTex = this.cube.toCanvas();
     this.exitTex = this.exitDoor.toCanvas();
     this.lampTex = this.lamp.toCanvas();
