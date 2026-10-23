@@ -25,6 +25,7 @@ dotnet run --project "$PROJ" -c Release -- --procgen 30 | tail -1
 
 echo "== version $VERSION"
 sed -i '' -E "s#<Version>[^<]*</Version>#<Version>$VERSION</Version>#" "$PROJ"
+sed -i '' -E "s#export const VERSION = '[^']*'#export const VERSION = '$VERSION'#" "$ROOT/web-build/src/app.js"
 
 rm -rf "$OUT" && mkdir -p "$OUT"
 for RID in osx-arm64 osx-x64 win-x64 linux-x64; do

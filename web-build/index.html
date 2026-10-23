@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portal 2D - a pixel-art portal puzzler</title>
+<meta name="description" content="Play Portal 2D in your browser: 53 test chambers, endless random tests and a map builder. A pixel-art, side-scrolling portal puzzler.">
+<meta property="og:title" content="Portal 2D">
+<meta property="og:description" content="A pixel-art, side-scrolling portal puzzler. Play it in your browser.">
+<meta property="og:image" content="https://raw.githubusercontent.com/xandertaylorx/portal-2d-game/main/docs/media/banner.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='1' width='3' height='14' rx='1.5' fill='%233fa7ff'/%3E%3Crect x='10' y='1' width='3' height='14' rx='1.5' fill='%23ff8a1f'/%3E%3C/svg%3E">
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0a0b10; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, Consolas, monospace; color: #e8e2d5; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; background: #0e1116; visibility: hidden; touch-action: none; outline: none; }
+  #status { position: absolute; padding: 24px; text-align: center; max-width: 36em; line-height: 1.5; }
+  @media (pointer: coarse) { #touch { display: block; } }
+  #touch { display: none; position: fixed; left: 0; right: 0; bottom: 0; padding: 8px 12px; background: #1d2130; color: #ffd08a; text-align: center; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="status">Loading Portal 2D...</div>
+<canvas id="game" width="640" height="360" tabindex="0"></canvas>
+<div id="touch">Portal 2D needs a keyboard and mouse. Open it on a computer to play.</div>
+<noscript><div style="position:absolute;padding:24px">Portal 2D needs JavaScript.</div></noscript>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

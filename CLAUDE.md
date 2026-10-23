@@ -34,6 +34,21 @@ If the tests fail, don't release: fix the problem or tell the user.
 - v2.1.0 builds check the archived `xandertaylorx/portal-2d-releases` repo, which holds a final v2.2.0 bridge release
   so those players can update. Don't delete that repo while old builds may still be around.
 
+## Web build (`web-build/`, GitHub Pages)
+
+- Plain-JS canvas port of the game: no bundler. `src/world.js` is a direct port of `Game/World.cs`; renderer, UI, editor,
+  library and app mirror their C# counterparts file for file. Levels are NOT ported: `--export-web web-build/data`
+  (`Testing/WebExport.cs`) dumps all chambers + a pool of verified Random Test chambers to JSON.
+- **Whenever chambers, procgen or physics change**, re-run `dotnet run --project src/Portal2D -c Release -- --export-web web-build/data`
+  and `node web-build/tests/replay.mjs` (replays the C# bot solutions through the JS world; must print "all N replays match").
+  `web-build/test/` (the traces) is generated and gitignored. Physics changes in `World.cs` must be mirrored in `web-build/src/world.js`.
+- `scripts/release.sh` stamps the version into `web-build/src/app.js` too. `.github/workflows/pages.yml` deploys
+  `web-build/` (index.html, src, data) to GitHub Pages on every push to `main` that touches it:
+  https://xandertaylorx.github.io/portal-2d-game/
+- Dev server: `python3 -m http.server -d web-build 8000`. `?level=N` and `?screen=select|options|controls|mymaps|editor` deep-link.
+- Share codes (`P2D1:`) are byte-compatible with the desktop game; the web SHARE button copies `<page>#P2D1:...`, which the
+  web game imports on load.
+
 ## Working on levels
 
 - Handcrafted chambers 1-21: `Game/Levels.cs`. Each needs a reference solution in `Testing/Solutions.cs` (same index).

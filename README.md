@@ -9,11 +9,13 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.7.0-ff8a1f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.0-ff8a1f?style=flat-square">
   <img alt=".NET" src="https://img.shields.io/badge/.NET-10-3fa7ff?style=flat-square">
-  <img alt="platforms" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-5ee08a?style=flat-square">
+  <img alt="platforms" src="https://img.shields.io/badge/platforms-Web%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux-5ee08a?style=flat-square">
   <img alt="license" src="https://img.shields.io/badge/license-PolyForm%20Strict-d97757?style=flat-square">
 </p>
+
+<p align="center"><b><a href="https://xandertaylorx.github.io/portal-2d-game/">▶ Play it in your browser</a></b> - no download, nothing to install.</p>
 
 ---
 
@@ -55,9 +57,16 @@
   <img src="docs/media/complete.png" width="49%" alt="Chamber complete">
 </p>
 
+## Play in your browser
+
+**[xandertaylorx.github.io/portal-2d-game](https://xandertaylorx.github.io/portal-2d-game/)**: the whole game, including
+the map builder, Random Test and featured maps. It needs a keyboard and mouse, so open it on a computer. Progress and
+your maps are saved in the browser. Maps are shared as links that open straight into the web game. The map codes are
+the same as the desktop game's, so a map made on either one plays on the other.
+
 ## Download & play
 
-Grab the latest build from the **[Releases page](https://github.com/xandertaylorx/portal-2d-game/releases/latest)**:
+Prefer a native app? Grab the latest build from the **[Releases page](https://github.com/xandertaylorx/portal-2d-game/releases/latest)**:
 
 | Platform | File |
 |---|---|
@@ -132,6 +141,21 @@ dotnet run --project src/Portal2D -- --preview 9 l9.png   # render a level to PN
 ./scripts/make-mac-app.sh                             # local macOS .app in dist/
 ```
 
+### The web build
+
+`web-build/` is the same game in plain JavaScript on a canvas (no bundler, no dependencies). The physics is a direct
+port of `Game/World.cs`, and a test replays the C# reference solutions through it to prove they still win frame for
+frame. The levels come straight from the C# game: `--export-web` writes every chamber and a pool of verified Random
+Test chambers to `web-build/data/`, so the web game never has to re-implement the generators or the bots.
+
+```bash
+dotnet run --project src/Portal2D -c Release -- --export-web web-build/data   # after changing any chamber
+node web-build/tests/replay.mjs                                              # JS physics vs the C# solutions
+python3 -m http.server -d web-build 8000                                     # play it at localhost:8000
+```
+
+A push to `main` that touches `web-build/` is deployed to GitHub Pages by `.github/workflows/pages.yml`.
+
 ### Releasing an update
 
 1. Add a `## [x.y.z]` section to [CHANGELOG.md](CHANGELOG.md) and commit.
@@ -148,7 +172,8 @@ src/Portal2D/
   Game/      simulation and physics, levels, procedural generator, audio synth, save data, updater, screens
   Render/    pixel buffers, sprite + tile painters, bitmap font, renderer, portal-lens shader
   UI/        immediate-mode pixel UI, mechanic icons
-  Testing/   input bot, reference solutions, test runner
+  Testing/   input bot, reference solutions, test runner, web export
+web-build/   the browser version (src/ game code, data/ exported levels, tests/ replay test)
 ```
 
 ## License

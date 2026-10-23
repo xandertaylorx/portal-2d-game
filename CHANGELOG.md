@@ -2,6 +2,20 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.8.0] - 2026-10-23
+
+### Added
+- **Portal 2D now runs in your browser.** Play the full game at
+  [xandertaylorx.github.io/portal-2d-game](https://xandertaylorx.github.io/portal-2d-game/): all 53 chambers, Random
+  Test, the map builder, featured maps, the portal lenses and the sound effects. Nothing to download. Your progress
+  and maps are saved in the browser.
+- **Share maps as links.** In the web version, SHARE copies a link that opens straight into the game and adds the map
+  to your list. Map codes are the same as the desktop game's, so maps move freely between the two.
+- **Back up your maps.** The web map builder can download all your maps as one file.
+
+### Changed
+- Random Test chambers in the web version come from a large pool of pre-verified chambers per difficulty.
+
 ## [2.7.0] - 2026-10-21
 
 ### Added

@@ -46,6 +46,8 @@ public static class Program
         }
         int ft = Array.IndexOf(args, "--featured");
         if (ft >= 0) return Featured.Build(args[ft + 1]);
+        int ew = Array.IndexOf(args, "--export-web");
+        if (ew >= 0) return WebExport.Build(args[ew + 1]);
         if (args.Contains("--procdiag")) { Console.Write(Procgen.Diagnose(20)); return 0; }
         int pg = Array.IndexOf(args, "--procgen");
         if (pg >= 0)
