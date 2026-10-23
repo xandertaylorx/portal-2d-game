@@ -2,6 +2,11 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.8.1] - 2026-10-23
+
+### Fixed
+- The web version now fills your whole browser window instead of sitting in a small box.
+
 ## [2.8.0] - 2026-10-23
 
 ### Added

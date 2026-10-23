@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.8.0-ff8a1f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.1-ff8a1f?style=flat-square">
   <img alt=".NET" src="https://img.shields.io/badge/.NET-10-3fa7ff?style=flat-square">
   <img alt="platforms" src="https://img.shields.io/badge/platforms-Web%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux-5ee08a?style=flat-square">
   <img alt="license" src="https://img.shields.io/badge/license-PolyForm%20Strict-d97757?style=flat-square">

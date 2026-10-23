@@ -7,10 +7,10 @@ const canvas = document.getElementById('game');
 const status = document.getElementById('status');
 
 function fit() {
+  // fill the browser window (letterboxed to 16:9); the canvas is pixelated so the art stays crisp
   const s = Math.min(window.innerWidth / 640, window.innerHeight / 360);
-  const px = s >= 1 ? Math.floor(s) : s;          // whole-number pixel scale when it fits, like the desktop game
-  canvas.style.width = `${640 * px}px`;
-  canvas.style.height = `${360 * px}px`;
+  canvas.style.width = `${640 * s}px`;
+  canvas.style.height = `${360 * s}px`;
 }
 window.addEventListener('resize', fit);
 fit();
