@@ -20,6 +20,8 @@ export function makeDef(j) {
     name: j.name, map: j.map, gun: j.gun,
     blueDir: { x: j.blue[0], y: j.blue[1] }, orangeDir: { x: j.orange[0], y: j.orange[1] },
     hints: j.hints || [], fling: !!j.fling, label: j.label || '', theme: j.theme || 0, seed: j.seed || 0,
+    family: j.family || 'sequence', layoutId: j.layoutId || '',
+    overview: !!j.family && j.family !== 'classic' && j.family !== 'sequence' && !j.family.startsWith('classic-'),
   };
 }
 

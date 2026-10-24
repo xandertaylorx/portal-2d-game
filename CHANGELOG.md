@@ -2,6 +2,21 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.10.0] - 2026-10-24
+
+### Added
+- **100 test chambers.** 47 new chambers take you through tall atriums, switchbacks, flooded islands,
+  freight lifts, beam windows, bridges, timed climbs, bounce shafts and cargo gantries. Expect routes that
+  double back, cubes that need a return trip, and exits above or behind your starting point.
+- **540 Random Test layouts**, with twelve new spatial puzzle families alongside handcrafted challenges
+  and short combinations of the full set of room types. Higher streaks mix tougher mechanics without
+  turning every test into a longer corridor.
+
+### Changed
+- New portal puzzles keep their floor, ceiling and distant portal panels in view so you can aim the whole route.
+- Random Test avoids recently played puzzle families when it can, and plays every layout in a tier before
+  repeating one. The original chambers keep their names, progress and best times.
+
 ## [2.9.1] - 2026-10-23
 
 ### Changed

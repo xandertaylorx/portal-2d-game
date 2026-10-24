@@ -4,12 +4,12 @@
 
 <p align="center">
   <b>A pixel-art, side-scrolling portal puzzler that runs in your browser, written from scratch.</b><br>
-  50 test chambers that get steadily harder, an endless procedurally generated mode,
+  100 test chambers with varied puzzle routes, an endless procedurally generated mode,
   and portals you can actually see through.
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.1-ff8a1f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.0-ff8a1f?style=flat-square">
   <img alt="JavaScript" src="https://img.shields.io/badge/plain-JavaScript-3fa7ff?style=flat-square">
   <img alt="platforms" src="https://img.shields.io/badge/play-in%20your%20browser-5ee08a?style=flat-square">
   <img alt="license" src="https://img.shields.io/badge/license-PolyForm%20Strict-d97757?style=flat-square">
@@ -32,16 +32,19 @@
 
 ## Features
 
-- **50 chambers** that teach and then combine: momentum flings, weighted cubes and buttons, toxic goo,
-  emancipation grids, lasers and receivers, glass, blue repulsion gel, launch plates, orange speed gel, timed
-  buttons and mirror cubes. Chambers 1-40 are fully handcrafted, each with its own layout and its own trick
-  (shooting portals through a window, a cube as a step stool, a sealed cell, a speed loop, a no-gun level...).
-  Chambers 41-50 combine verified puzzle rooms into longer runs, ending in a nine-room Final Exam.
+- **100 chambers** built around momentum flings, weighted cubes and buttons, toxic goo,
+  emancipation grids, lasers and receivers, glass, repulsion gel, launch plates, speed gel, timed
+  buttons and mirror cubes. The original 53 chambers keep their names and best times. Another 47 explore
+  tall atriums, switchbacks, flooded islands, upstairs/downstairs freight runs, beam windows, bridges,
+  timed staircases, bounce shafts, island jumps, cube retrieval and cargo gantries. Routes alternate
+  between compact puzzles, vertical climbs, crossings and return journeys.
 - **Map builder**: design your own chambers with a point-and-click editor. Paint walls, goo, gel, lasers, cubes,
   buttons and doors, wire doors to buttons by colour, undo and redo, then test play it. Maps save on your device
   automatically, and you can share one with a friend as a single line of text.
-- **Random Test mode**: endless chambers assembled from randomised puzzle rooms. Each run gets harder, and the game
-  tracks your best streak.
+- **Random Test mode**: 540 verified layouts across 15 streak tiers, mixing twelve spatial puzzle families,
+  handcrafted challenges and short combinations drawn from all 28 room archetypes. The picker avoids the last
+  three puzzle families when alternatives remain, and cycles through every map in a tier before repeating one.
+  The game tracks your best streak.
 - **Portal lenses**: a fragment shader turns each linked portal into a fish-eye window onto the other side, with
   parallax, ripples and a dithered pixel rim.
 - **Everything is generated in code**: every sprite, tile, the bitmap font and every sound effect. The game ships no
@@ -113,8 +116,11 @@ painted chamber number.
 
 ### Every level is proven solvable
 The C# bots in `OLD-DESKTOP/src/Portal2D/Testing/` drive the real physics with scripted inputs. Every handcrafted chamber has a reference solution,
-and `--test` plays all of them headlessly. `tests/replay.mjs` replays those solutions through the JavaScript physics. In Random Test, each room archetype writes out the inputs that solve it.
-A generated level is only handed to you after the bot has finished it; otherwise the next sub-seed is tried.
+and `--test` plays all of them headlessly. `tests/replay.mjs` replays those solutions through the JavaScript physics.
+The web authoring tool in `tools/LevelForge/` references that frozen C# simulation and adds the new
+puzzles without changing the desktop game. It records a winning solution for **all 100 campaign chambers and all
+540 random tests**; the JavaScript replay test checks every one before shipping. Unsolved candidates are rejected
+rather than exported.
 
 <p align="center"><img src="docs/media/sprites.png" width="70%" alt="Sprites"></p>
 
@@ -124,7 +130,9 @@ No build step and no dependencies: it is plain JavaScript modules on a 640×360 
 
 ```bash
 python3 -m http.server 8000          # then open http://localhost:8000
-node tests/replay.mjs                # replay the reference solutions through the JS physics
+dotnet run --project tools/LevelForge -c Release -- data  # export levels + all reference traces
+node tests/content.mjs               # check map diversity and random selection cycles
+node tests/replay.mjs                # replay all 640 reference solutions through the JS physics
 node tools/make-favicon.mjs          # regenerate favicon.png from the hero sprite
 ```
 
@@ -135,9 +143,10 @@ A push to `main` that touches the game files is deployed to GitHub Pages by `.gi
 index.html   page shell, fullscreen button
 src/         game code: world.js (physics), render.js (scene + portal lenses), app.js (screens), editor.js (map builder),
              art.js (sprites, tiles, character customiser), audio.js (synthesised sound), maps.js (saves, share codes)
-data/        the 53 chambers + a pool of Random Test chambers (JSON)
-tests/       replay.mjs
-OLD-DESKTOP/ the original C# version, which also generated data/ (see its README)
+data/        the 100 chambers + 540 verified Random Test layouts (JSON)
+tests/       replay.mjs (physics parity), content.mjs (content and selection contracts)
+tools/LevelForge/ C# web level authoring + export, using the frozen reference physics
+OLD-DESKTOP/ the original C# version and reference simulation (see its README)
 ```
 
 ## License

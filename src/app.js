@@ -12,8 +12,9 @@ import { Input } from './input.js';
 import { SaveData, CustomMap, CustomMaps } from './maps.js';
 import { MapEditor } from './editor.js';
 import { MapLibrary } from './library.js';
+import { pickRandomTest } from './random.js';
 
-export const VERSION = '2.9.1';
+export const VERSION = '2.10.0';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 
@@ -46,7 +47,7 @@ export class App {
     this.world = null;
     this.level = 0;
     this.randomMode = false; this.customMode = false; this.fromEditor = false;
-    this.randomDef = null; this.randomSeed = 0; this.streak = 0; this.usedRandom = new Set();
+    this.randomDef = null; this.randomSeed = 0; this.streak = 0; this.usedRandom = new Set(); this.recentRandom = [];
     this.customMap = null;
     this.editor = null;
     this.selPage = -1;
@@ -227,7 +228,7 @@ export class App {
       if (Input.pressed('Escape')) { if (this.customMode) this.exitCustom(); else this.go(() => this.setScreen('menu')); }
     }
     this.followPlayer(dt, false);
-    this.updateCam(dt);
+    this.updateCam(dt, this.playZoom());
   }
 
   mouseWorld() {
@@ -272,6 +273,13 @@ export class App {
     w.events.length = 0;
   }
 
+  playZoom() {
+    // Show both ends of portal sightlines. Island runs can scroll horizontally because they use jumps.
+    const w = this.world;
+    if (!w?.def.overview) return K.Px;
+    return Math.min(K.Px, K.CanvasH / w.heightPx, w.def.family === 'islands' ? K.Px : K.CanvasW / w.widthPx);
+  }
+
   followPlayer(dt, snap) {
     const w = this.world, p = w.player;
     const target = p ? V(p.pos.x, p.pos.y - 24) : V(w.widthPx / 2, w.heightPx / 2);
@@ -282,19 +290,20 @@ export class App {
       if (l > 90) { lx *= 90 / l; ly *= 90 / l; }
       target.x += lx; target.y += ly;
     }
-    target.x = w.widthPx <= K.ScreenW ? w.widthPx / 2 : clamp(target.x, K.ScreenW / 2, w.widthPx - K.ScreenW / 2);
-    target.y = w.heightPx <= K.ScreenH ? w.heightPx / 2 : clamp(target.y, K.ScreenH / 2, w.heightPx - K.ScreenH / 2);
+    const viewW = K.CanvasW / this.playZoom(), viewH = K.CanvasH / this.playZoom();
+    target.x = w.widthPx <= viewW ? w.widthPx / 2 : clamp(target.x, viewW / 2, w.widthPx - viewW / 2);
+    target.y = w.heightPx <= viewH ? w.heightPx / 2 : clamp(target.y, viewH / 2, w.heightPx - viewH / 2);
     if (snap) this.camPos = target;
     else { const k = 1 - Math.exp(-dt * 7); this.camPos = V(lerp(this.camPos.x, target.x, k), lerp(this.camPos.y, target.y, k)); }
   }
 
-  updateCam(dt) {
+  updateCam(dt, zoom = K.Px) {
     this.shake = Math.max(0, this.shake - dt * 40);
     const ox = this.shake > 0 ? (Math.random() - 0.5) * this.shake * 2 : 0, oy = this.shake > 0 ? (Math.random() - 0.5) * this.shake * 2 : 0;
     this.cam = {
       offset: V(K.CanvasW / 2 + roundEven(ox * K.Px), K.CanvasH / 2 + roundEven(oy * K.Px)),
       target: V(roundEven(this.camPos.x * K.Px) / K.Px, roundEven(this.camPos.y * K.Px) / K.Px),
-      zoom: K.Px,
+      zoom,
     };
   }
 
@@ -312,18 +321,14 @@ export class App {
 
   pickRandom() {
     const pool = this.randomPools[Math.min(this.streak, this.randomPools.length - 1)];
-    const fresh = pool.filter((d) => !this.usedRandom.has(d.seed));
-    const from = fresh.length > 0 ? fresh : pool;
-    const def = from[Math.floor(Math.random() * from.length)];
-    this.usedRandom.add(def.seed);
-    return def;
+    return pickRandomTest(pool, this.usedRandom, this.recentRandom);
   }
 
   async startRandom(newRun) {
     if (this.fadeAction) return;
     try { await this.ensureRandomPools(); } catch { this.showToast('COULD NOT LOAD RANDOM TESTS - CHECK YOUR CONNECTION'); return; }
     this.go(() => {
-      if (newRun) { this.streak = 0; this.usedRandom.clear(); }
+      if (newRun) { this.streak = 0; this.usedRandom.clear(); this.recentRandom.length = 0; }
       this.randomMode = true;
       this.customMode = false;
       this.randomDef = this.pickRandom();
@@ -344,7 +349,7 @@ export class App {
     this.paused = false;
     this.accumulator = 0;
     this.followPlayer(0, true);
-    this.updateCam(0);
+    this.updateCam(0, this.playZoom());
   }
 
   completeLevel() {
@@ -554,7 +559,7 @@ export class App {
       if (over && UI.click) { this.audio.click(); this.startLevel(i); }
     }
     const by = y0 + 3 * (ch + gy) + 6, full = cols * cw + (cols - 1) * gx;
-    const rs = s.randomBestStreak > 0 ? `BEST STREAK ${s.randomBestStreak}   CLEARED ${s.randomCleared}` : 'PROCEDURALLY GENERATED - NEVER THE SAME TWICE';
+    const rs = s.randomBestStreak > 0 ? `BEST STREAK ${s.randomBestStreak}   CLEARED ${s.randomCleared}` : 'VARIED PUZZLES - BUILD YOUR BEST STREAK';
     if (UI.button('sel_random', R(x0, by, full - 300, 60), 'RANDOM TEST', { accent: PP.Exit, sub: rs })) this.startRandom(true);
     const px = x0 + full - 284;
     if (this.selPage > 0 && UI.smallButton('sel_prev', R(px, by + 6, 70, 48), '<')) { this.selPage--; this.stateT = 0.2; }
