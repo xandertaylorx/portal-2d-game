@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.0-ff8a1f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-2.11.0-ff8a1f?style=flat-square">
   <img alt="JavaScript" src="https://img.shields.io/badge/plain-JavaScript-3fa7ff?style=flat-square">
   <img alt="platforms" src="https://img.shields.io/badge/play-in%20your%20browser-5ee08a?style=flat-square">
   <img alt="license" src="https://img.shields.io/badge/license-PolyForm%20Strict-d97757?style=flat-square">
@@ -34,16 +34,16 @@
 
 - **100 chambers** built around momentum flings, weighted cubes and buttons, toxic goo,
   emancipation grids, lasers and receivers, glass, repulsion gel, launch plates, speed gel, timed
-  buttons and mirror cubes. The original 53 chambers keep their names and best times. Another 47 explore
-  tall atriums, switchbacks, flooded islands, upstairs/downstairs freight runs, beam windows, bridges,
-  timed staircases, bounce shafts, island jumps, cube retrieval and cargo gantries. Routes alternate
-  between compact puzzles, vertical climbs, crossings and return journeys.
+  buttons and mirror cubes. Eight new circuit puzzles require cargo retrieval, beam reuse, two-mirror alignment
+  and timed portal routes. Another 39 authored combinations build into longer galleries and alternating floors,
+  with weight circuits that must stay powered to unlock the final airlock. Lessons come first, hints become
+  optional after the opening five, and **Final Exam is chamber 100**. Original chamber records survive the reorder.
 - **Map builder**: design your own chambers with a point-and-click editor. Paint walls, goo, gel, lasers, cubes,
   buttons and doors, wire doors to buttons by colour, undo and redo, then test play it. Maps save on your device
   automatically, and you can share one with a friend as a single line of text.
-- **Random Test mode**: 540 verified layouts across 15 streak tiers, mixing twelve spatial puzzle families,
-  handcrafted challenges and short combinations drawn from all 28 room archetypes. The picker avoids the last
-  three puzzle families when alternatives remain, and cycles through every map in a tier before repeating one.
+- **Random Test mode**: 540 verified challenges across 15 streak tiers. Two-stage tests grow into three- and
+  four-stage routes; advanced tests require multiple completed circuits. The picker avoids recent opening
+  puzzles and minimizes repeated mechanics across entire tests, while exhausting each tier before repeating a map.
   The game tracks your best streak.
 - **Portal lenses**: a fragment shader turns each linked portal into a fish-eye window onto the other side, with
   parallax, ripples and a dithered pixel rim.
@@ -132,9 +132,13 @@ No build step and no dependencies: it is plain JavaScript modules on a 640×360 
 python3 -m http.server 8000          # then open http://localhost:8000
 dotnet run --project tools/LevelForge -c Release -- data  # export levels + all reference traces
 node tests/content.mjs               # check map diversity and random selection cycles
+node tests/challenges.mjs            # progression, saves, exit locks and shortcut attempts
 node tests/replay.mjs                # replay all 640 reference solutions through the JS physics
 node tools/make-favicon.mjs          # regenerate favicon.png from the hero sprite
 ```
+
+Open `http://localhost:8000/tests/browser-smoke.html` for campaign, random and custom-map rendering checks
+and an exit-sign contact sheet.
 
 `?level=N` and `?screen=select|options|controls|character|mymaps|editor` deep-link to a chamber or screen.
 A push to `main` that touches the game files is deployed to GitHub Pages by `.github/workflows/pages.yml`.
@@ -144,7 +148,7 @@ index.html   page shell, fullscreen button
 src/         game code: world.js (physics), render.js (scene + portal lenses), app.js (screens), editor.js (map builder),
              art.js (sprites, tiles, character customiser), audio.js (synthesised sound), maps.js (saves, share codes)
 data/        the 100 chambers + 540 verified Random Test layouts (JSON)
-tests/       replay.mjs (physics parity), content.mjs (content and selection contracts)
+tests/       physics replays, content/selection, challenge safety, and browser rendering checks
 tools/LevelForge/ C# web level authoring + export, using the frozen reference physics
 OLD-DESKTOP/ the original C# version and reference simulation (see its README)
 ```

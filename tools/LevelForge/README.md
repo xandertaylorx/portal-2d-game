@@ -1,28 +1,45 @@
 # Web chamber authoring
 
 This is the maintained C# level exporter for the browser game. It references the frozen desktop assembly for
-`LevelBuilder`, physics, bots and the original 53 chambers; it does not modify or add features to the desktop game.
-Run from the repository root with the .NET 10 SDK:
+`LevelBuilder`, physics and bots; it does not modify the desktop game. Run with the .NET 10 SDK:
 
 ```sh
 dotnet run --project tools/LevelForge -c Release -- data
 node tests/content.mjs
+node tests/challenges.mjs
 node tests/replay.mjs
 ```
 
-`Puzzles.cs` authors twelve spatial puzzle recipes with four campaign layouts apiece (the final recipe has three).
-They are interleaved to make 47 additional chambers. Parameters change dimensions, shelf heights, sightlines,
-travel distances and direction. The first 53 chamber names are preserved because saves use names as keys.
-`--check` checks only the additions, including any reflected solutions, without writing data.
+- `classic.json` freezes the original 53 maps and winning input traces. The legacy procedural generator uses
+  process-randomized hashing, so rebuilding it would silently alter existing maps and invalidate records.
+- `Circuits.cs` authors eight standalone puzzles and their solutions: Light Well, About Turn, Dry Dock,
+  Freight Lift, Beam Split, Flyover, Closing Time and Rebound.
+- `Campaign.cs` specifies 39 multi-stage plans. `Spatial.cs` connects their rooms as horizontal galleries or
+  alternating floors, preserves necessary portal surfaces, and assigns separate circuits. Weight circuits and
+  stable mirror circuits remain required by the final airlock; portal-dependent receivers and timers stay local.
+- `Program.cs` orders all 100 chambers, ending with Final Exam. Original records stay keyed by their names;
+  replacement chambers have new `recordKey` values. The first five lessons reveal hints automatically.
 
-`Program.cs` records the actual inputs needed to win each chamber. Random Test gets 36 distinct layouts per tier:
-24 spatial puzzles, two complete handcrafted challenges, and ten short sequences drawn from the 28 reference room
-types. Each tier includes all twelve new families. Spatial recipes vary dimensions beyond their campaign versions;
-reflections reverse map tiles, directional devices, fixed portal normals and recorded inputs. Reflections are
-simulated again and discarded if they fail. Invalid sightlines, incompatible room entrances, losing solutions and
-duplicate random layouts are rejected. Harder sequence mechanics enter as the streak increases, with at most three
-rooms per sequence. Generation fails if a slot cannot be filled, rather than exporting an unsolved fallback.
+The spatial solution adapter reads the actual simulation through each room's local coordinate system, including
+cube positions, door states and teleports. It transforms inputs, not outcomes. Mirrored portal shots account for
+floor/ceiling pair selection. A stage must reach its exit and the complete reference solution must win with every
+required airlock circuit active. Failed plans are rejected, never exported as fallbacks.
 
-The output is `data/levels.json`, `data/random.json`, and gitignored `test/traces.json`. Replays cover every exported
-campaign chamber and every random layout. The legacy `--export-web` command in OLD-DESKTOP still exports only the
-frozen original content; use this tool when updating the maintained browser game.
+Random Test contains 36 distinct layouts per tier across 15 tiers. Tiers 1–5 combine two puzzles, tiers 6–10 combine
+three, and tiers 11–15 combine four. No test repeats a source puzzle internally. Advanced tests require at least
+two persistent circuits. Seeds, accepted plans and layout hashes are deterministic; duplicate layouts are rejected.
+
+Useful diagnostics:
+
+```sh
+dotnet run --project tools/LevelForge -c Release -- --circuits   # eight new standalone solutions
+dotnet run --project tools/LevelForge -c Release -- --sources    # all composable source puzzles
+dotnet run --project tools/LevelForge -c Release -- --blueprints # all 47 additions without writing data
+```
+
+The exporter writes `data/levels.json`, `data/random.json`, and gitignored `test/traces.json` only after all 640
+solutions win. The JS replay test covers every exported map, including the airlock requirement. Challenge tests
+also check exit clearance, individual circuit locks, obvious run/jump shortcuts, progression and saved records.
+Serve the repository and open `tests/browser-smoke.html` for actual canvas rendering checks.
+
+The legacy desktop `--export-web` command still exports only frozen content. Use this tool for the browser game.

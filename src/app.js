@@ -14,7 +14,7 @@ import { MapEditor } from './editor.js';
 import { MapLibrary } from './library.js';
 import { pickRandomTest } from './random.js';
 
-export const VERSION = '2.10.0';
+export const VERSION = '2.11.0';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 
@@ -29,7 +29,7 @@ export class App {
     this.chambers = data.levels.chambers.map(makeDef);
     this.menuDef = makeDef(data.levels.menu);
     this.randomPools = null;          // loaded on first use
-    this.save = SaveData.load(this.chambers.map((l) => l.name));
+    this.save = SaveData.load(this.chambers.map((l) => l.recordKey));
     Sprites.setLook(this.save.look);
     this.audio = new Audio();
     this.audio.master = this.save.master; this.audio.sfxVolume = this.save.sfx; this.audio.ambienceVolume = this.save.ambience;
@@ -274,23 +274,23 @@ export class App {
   }
 
   playZoom() {
-    // Show both ends of portal sightlines. Island runs can scroll horizontally because they use jumps.
-    const w = this.world;
-    if (!w?.def.overview) return K.Px;
-    return Math.min(K.Px, K.CanvasH / w.heightPx, w.def.family === 'islands' ? K.Px : K.CanvasW / w.widthPx);
+    return K.Px;
   }
 
   followPlayer(dt, snap) {
     const w = this.world, p = w.player;
     const target = p ? V(p.pos.x, p.pos.y - 24) : V(w.widthPx / 2, w.heightPx / 2);
+    const viewW = K.ScreenW, viewH = K.ScreenH;
+    // Clamp the follow position before looking: otherwise looking up at the bottom of a tall room does nothing.
+    target.x = w.widthPx <= viewW ? w.widthPx / 2 : clamp(target.x, viewW / 2, w.widthPx - viewW / 2);
+    target.y = w.heightPx <= viewH ? w.heightPx / 2 : clamp(target.y, viewH / 2, w.heightPx - viewH / 2);
     if (p && !p.dead && !p.won && this.screen === 'play') {
-      const aim = this.mouseWorld();
-      let lx = (aim.x - p.pos.x) * 0.12, ly = (aim.y - p.pos.y) * 0.12;
-      const l = Math.hypot(lx, ly);
-      if (l > 90) { lx *= 90 / l; ly *= 90 / l; }
-      target.x += lx; target.y += ly;
+      // Screen-relative look-ahead has no feedback loop with mouseWorld(). Move the pointer to inspect a room.
+      if (Input.inside) {
+        target.x += clamp((UI.mouse.x - K.ScreenW / 2) * 0.45, -240, 240);
+        target.y += clamp((UI.mouse.y - K.ScreenH / 2) * 0.55, -190, 190);
+      }
     }
-    const viewW = K.CanvasW / this.playZoom(), viewH = K.CanvasH / this.playZoom();
     target.x = w.widthPx <= viewW ? w.widthPx / 2 : clamp(target.x, viewW / 2, w.widthPx - viewW / 2);
     target.y = w.heightPx <= viewH ? w.heightPx / 2 : clamp(target.y, viewH / 2, w.heightPx - viewH / 2);
     if (snap) this.camPos = target;
@@ -340,6 +340,7 @@ export class App {
 
   loadLevel(fresh) {
     this.world = new World(this.currentDef);
+    if (fresh) this.hintsOn = !!this.currentDef.tutorial;
     this.levelTime = 0;
     this.wonT = 0;
     this.startPos = this.world.player ? V(this.world.player.pos.x, this.world.player.pos.y) : V(0, 0);
@@ -772,6 +773,18 @@ export class App {
       const cpos = V(K.ScreenW / 2 - 220, roundEven(200 - (1 - slide) * 24));
       g.opacity = this.hudAlpha('card', R(cpos.x, cpos.y, 440, 250));
       this.drawChamberCard(cpos, slide);
+      g.opacity = 1;
+    }
+
+    if (def.exitGroups?.length) {
+      const powered = def.exitGroups.filter((group) => w.groupActive[group]).length;
+      const cr = R(16, K.ScreenH - 104, 356, 54);
+      g.opacity = this.hudAlpha('circuits', cr);
+      UI.panel(cr, 0.92);
+      UI.text(`EXIT CIRCUITS ${powered}/${def.exitGroups.length}`, V(cr.x + 14, cr.y + 12), 16, w.exitReady ? PP.Exit : PP.Cream);
+      def.exitGroups.forEach((group, i) => {
+        g.rect(cr.x + 14 + i * 30, cr.y + 34, 22, 6, w.groupActive[group] ? PP.Exit : PP.Hazard);
+      });
       g.opacity = 1;
     }
 

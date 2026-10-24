@@ -271,10 +271,18 @@ export class Renderer {
     g.additive = true;
     g.circleGrad(x, yb - 36, 90, C(60, 230, 140, 45), C(60, 230, 140, 0));
     g.additive = false;
-    g.tex(Sprites.exitTex, 0, 0, 28, 44, x - 28, yb - 88, 56, 88);
+    // Match the one-tile-wide, two-tile-high trigger instead of clipping a larger door into nearby walls.
+    g.tex(Sprites.exitTex, 0, 0, 16, 32, x - 16, yb - 64, 32, 64);
+    if (!w.exitReady) {
+      g.rect(x - 12, yb - 58, 24, 54, C(20, 24, 28, 210));
+      g.rect(x - 6, yb - 34, 12, 12, C(245, 197, 66));
+      g.rect(x - 4, yb - 40, 8, 8, C(245, 197, 66));
+      g.rect(x - 2, yb - 38, 4, 4, C(20, 24, 28));
+      return;
+    }
     for (let k = 0; k < 3; k++) {
       const tt = (t * 0.8 + k / 3) % 1;
-      const cy = Math.trunc(snap(yb - 12 - tt * 56));
+      const cy = Math.trunc(snap(yb - 12 - tt * 36));
       const col = C(210, 255, 225, 220 * Math.sin(tt * Math.PI));
       for (let i = 0; i < 4; i++) {
         g.rect(Math.trunc(x) - 8 + i * 2, cy + 6 - i * 2, 2, 2, col);
@@ -286,10 +294,15 @@ export class Renderer {
   drawExitSign(w) {
     const g = this.gfx;
     const x = w.exit.x * T + T / 2, yb = (w.exit.y + 1) * T;
-    g.rect(Math.trunc(x) - 26, Math.trunc(yb) - 112, 52, 20, C(20, 24, 28));
-    g.rect(Math.trunc(x) - 26, Math.trunc(yb) - 112, 52, 2, C(58, 65, 80));
+    g.rect(Math.trunc(x) - 26, Math.trunc(yb) - 88, 52, 20, C(20, 24, 28));
+    g.rect(Math.trunc(x) - 26, Math.trunc(yb) - 88, 52, 2, C(58, 65, 80));
     const m = PixelFont.measure('EXIT', 1);
-    PixelFont.draw(g, 'EXIT', V(x - m.x / 2, yb - 108), 1, PP.Exit);
+    PixelFont.draw(g, 'EXIT', V(x - m.x / 2, yb - 84), 1, w.exitReady ? PP.Exit : PP.Hazard);
+    const groups = w.def.exitGroups || [];
+    for (let i = 0; i < groups.length; i++) {
+      const lit = w.groupActive[groups[i]];
+      g.rect(x - groups.length * 4 + i * 8, yb - 66, 6, 4, lit ? PP.Exit : C(245, 90, 70));
+    }
   }
 
   drawButton(b) {

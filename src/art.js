@@ -205,16 +205,16 @@ function buildCube() {
 }
 
 function buildExit() {
-  const p = new Pix(28, 44);
+  const p = new Pix(16, 32);
   const frame = C(58, 65, 80), frameHi = C(92, 101, 122);
-  p.rect(0, 0, 28, 44, frame);
-  p.hLine(1, 0, 26, frameHi); p.vLine(0, 1, 43, frameHi);
-  for (let y = 4; y < 44; y++) {
-    const t = (y - 4) / 40;
-    p.rect(4, y, 20, 1, mix(C(18, 60, 40), C(86, 220, 140), t * t));
+  p.rect(0, 0, 16, 32, frame);
+  p.hLine(1, 0, 14, frameHi); p.vLine(0, 1, 31, frameHi);
+  for (let y = 3; y < 32; y++) {
+    const t = (y - 3) / 29;
+    p.rect(2, y, 12, 1, mix(C(18, 60, 40), C(86, 220, 140), t * t));
   }
-  p.rect(4, 4, 20, 2, C(170, 255, 200));
-  p.set(0, 0, CLEAR); p.set(27, 0, CLEAR);
+  p.rect(2, 3, 12, 1, C(170, 255, 200));
+  p.set(0, 0, CLEAR); p.set(15, 0, CLEAR);
   p.outline(PP.TileOut);
   return p;
 }

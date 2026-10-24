@@ -26,11 +26,14 @@ for (const [tier, raw] of pools.entries()) {
     const cycleLayouts = new Set();
     for (let i = 0; i < pool.length; i++) {
       const fresh = pool.filter(d => !used.has(d.layoutId));
-      const alternatives = fresh.filter(d => !recent.includes(d.family));
+      const alternatives = fresh.filter(d => !recent.some(r => r.family === d.family));
       const before = [...recent];
       const d = pickRandomTest(pool, used, recent, rng);
       assert.ok(!cycleLayouts.has(d.layoutId), 'no map repeats before a tier is exhausted');
-      if (alternatives.length) assert.ok(!before.includes(d.family), 'prefer a family absent from the last three tests');
+      if (alternatives.length) assert.ok(!before.some(r => r.family === d.family), 'prefer a family absent from the last three tests');
+      const overlap = candidate => before.reduce((sum, r, index) => sum
+        + candidate.mechanics.filter(m => r.mechanics.includes(m)).length * (index + 1), 0);
+      if (fresh.length) assert.equal(overlap(d), Math.min(...(alternatives.length ? alternatives : fresh).map(overlap)), 'minimize repeated mechanics, including later stages');
       cycleLayouts.add(d.layoutId);
     }
   }

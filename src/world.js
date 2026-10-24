@@ -21,7 +21,8 @@ export function makeDef(j) {
     blueDir: { x: j.blue[0], y: j.blue[1] }, orangeDir: { x: j.orange[0], y: j.orange[1] },
     hints: j.hints || [], fling: !!j.fling, label: j.label || '', theme: j.theme || 0, seed: j.seed || 0,
     family: j.family || 'sequence', layoutId: j.layoutId || '',
-    overview: !!j.family && j.family !== 'classic' && j.family !== 'sequence' && !j.family.startsWith('classic-'),
+    mechanics: j.mechanics || [j.family || 'sequence'], difficulty: j.difficulty || 0,
+    exitGroups: j.exitGroups || [], recordKey: j.recordKey || j.name, tutorial: !!j.tutorial,
   };
 }
 
@@ -393,13 +394,15 @@ export class World {
     }
 
     // exit
-    if (this.hasExit && overlaps(p.rect, { x: this.exit.x * T + 6, y: (this.exit.y - 1) * T, w: T - 12, h: T * 2 })) {
+    if (this.hasExit && this.exitReady && overlaps(p.rect, { x: this.exit.x * T + 6, y: (this.exit.y - 1) * T, w: T - 12, h: T * 2 })) {
       p.won = true;
       this.dropCube(p, false);
       this.emit(Sfx.Win, p.pos);
       this.fx.burst(p.pos, Palette.Green, 40, 220, 0.9, 3);
     }
   }
+
+  get exitReady() { return (this.def.exitGroups || []).every((group) => this.groupActive[group]); }
 
   dropCube(p, toss) {
     const c = p.holding;

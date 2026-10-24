@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Portal 2D browser checks</title>
+<style>body{background:#121820;color:#d8eadf;font:14px monospace}canvas{image-rendering:pixelated}#game{display:none}</style>
+<h1>Browser render checks</h1><p id="result">Running…</p><canvas id="exits" width="960" height="660"></canvas><canvas id="game" width="640" height="360"></canvas>
+<script type="module">
+import { App } from '../src/app.js';
+import { World, makeDef } from '../src/world.js';
+import { CustomMap } from '../src/maps.js';
+const result = document.querySelector('#result');
+try {
+  const levels = await (await fetch('../data/levels.json')).json();
+  const random = await (await fetch('../data/random.json')).json();
+  const app = new App(document.querySelector('#game'), {levels});
+  app.screen = 'play'; app.showIntro = false; app.fade = 0; app.dt = 1/60;
+  const sheet = document.querySelector('#exits').getContext('2d');
+  sheet.imageSmoothingEnabled = false;
+  const captures = ['Awakening','Peephole','Light Well','Beam Split','Freight Lift','Archipelago','Spiral Stair','Cargo Net','The Long Way Up','Through the Looking Glass','Round Trip','Final Exam'];
+  let count = 0;
+  for (const raw of [...levels.chambers, ...random.pools.map(p => p[0])]) {
+    app.world = new World(makeDef(raw));
+    app.level = Math.max(0, levels.chambers.findIndex(d => d.name === raw.name));
+    app.followPlayer(0, true); app.updateCam(0); app.draw();
+    const w = app.world;
+    app.camPos = {x:w.exit.x*32+16, y:w.exit.y*32-32};
+    app.updateCam(0); app.draw();
+    const index = captures.indexOf(raw.name);
+    if (index >= 0) {
+      const x = index%4*240, y = Math.floor(index/4)*220;
+      sheet.fillStyle = '#121820'; sheet.fillRect(x,y,240,220);
+      sheet.drawImage(app.canvas,260,125,120,100,x,y+20,240,200);
+      sheet.fillStyle = '#d8eadf'; sheet.font = '12px monospace';
+      sheet.fillText(`${raw.label} ${raw.name}`,x+4,y+14);
+    }
+    count++;
+    result.textContent = `Rendered ${count}/115 chambers at spawn and exit…`;
+    await new Promise(resolve => setTimeout(resolve,0));
+  }
+  app.customMode = true; app.customMap = CustomMap.blank('Custom smoke'); app.loadLevel(true); app.showIntro = false; app.draw();
+  result.textContent = `PASS: ${count} campaign/random chambers rendered at spawn and exit; custom map HUD also rendered. Exit contact sheet below.`;
+} catch(e) {
+  result.textContent = `FAIL: ${e.stack}`;
+  console.error(e);
+}
+</script>

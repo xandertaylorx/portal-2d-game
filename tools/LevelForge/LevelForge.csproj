@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <None Update="classic.json" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../../OLD-DESKTOP/src/Portal2D/Portal2D.csproj" />
   </ItemGroup>
 </Project>

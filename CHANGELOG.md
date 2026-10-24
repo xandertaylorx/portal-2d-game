@@ -2,6 +2,27 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.11.0] - 2026-10-24
+
+### Changed
+- Rebuilt the 47 expansion chambers. New puzzles include retrieving two cubes from separate areas,
+  changing a beam's purpose after collecting cargo, aligning two mirrors, and carrying cargo through a bounce route.
+  Longer chambers combine these with earlier mechanics across galleries and alternating floors.
+- Reordered all 100 chambers into lessons, circuit puzzles and longer challenges. **Final Exam is now chamber 100.**
+- Multi-stage airlocks require completed weight circuits to stay powered. A circuit counter and locked-door
+  indicators show what the exit still needs.
+- Rebuilt all 540 Random Tests into two-, three- and four-stage challenges. Higher streaks require multiple
+  persistent circuits, and selection avoids repeating mechanics from recent tests.
+- Hints appear automatically only in the first five lessons; press H when you want help later.
+
+### Fixed
+- Exit doors fit their openings, with readable signs at the normal pixel scale.
+- Removed the fractional chamber zoom that distorted text and sprites. Moving the pointer toward the screen edge
+  lets you inspect tall rooms and distant portal surfaces.
+- Corrected blocked floor transitions, unsafe entries, missing exit floors and reflected laser sightlines in the
+  rebuilt layouts. Every exported map has a winning reference replay in the browser physics.
+- Original chamber best times survive the reorder; rebuilt chambers start with fresh records.
+
 ## [2.10.0] - 2026-10-24
 
 ### Added
