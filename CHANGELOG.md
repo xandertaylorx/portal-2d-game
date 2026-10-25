@@ -2,6 +2,19 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.13.0] - 2026-10-25
+
+### Changed
+- **Moody, dynamic lighting.** Chambers are now dark, and only real lights brighten them. Lamps, portals, lasers, laser
+  impacts, receivers, lit buttons, door lights, fizzlers, goo, the exit and charged cubes all cast light that walls,
+  cubes and you block, so you throw shadows and light pools spill around corners. Shadows are soft-edged, and a
+  faint glow keeps you visible in dark corners. Portals wash the floor and walls blue or orange.
+- Laser beams are brighter and more intense, with a wide hot bloom and a larger white-hot flare where they hit.
+- The holographic field on carried cubes is subtler.
+
+### Fixed
+- Removed the glowing blobs that travelled along laser beams.
+
 ## [2.12.0] - 2026-10-25
 
 ### Changed

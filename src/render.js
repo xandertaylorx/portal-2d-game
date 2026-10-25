@@ -34,6 +34,9 @@ export class Renderer {
     this.viewData = [null, null];
     this.lensCanvas = makeCanvas(192, 192);
     this.lensCtx = this.lensCanvas.getContext('2d');
+    this.lightCanvas = makeCanvas(K.CanvasW / 2, K.CanvasH / 2);   // half-res light map: bilinear upscale softens the shadows
+    this.lights = [];
+    this.occluders = [];
   }
 
   artFor(w) {
@@ -112,7 +115,6 @@ export class Renderer {
     const a = this.artFor(w);
     g.rectR(view, PP.Bg);
     this.drawLayer(a.backTex, w, view);
-    this.drawLamps(w, view);
     if (w.hasExit) this.drawExit(w);
     const x0 = Math.max(0, Math.trunc(view.x / T)), y0 = Math.max(0, Math.trunc(view.y / T));
     const x1 = Math.min(w.w - 1, Math.trunc((view.x + view.w) / T)), y1 = Math.min(w.h - 1, Math.trunc((view.y + view.h) / T));
@@ -126,16 +128,23 @@ export class Renderer {
     if (w.player) this.drawWithClones(w, w.player, () => this.drawPlayer(w.player));
     this.drawLayer(a.frontTex, w, view);
 
+    // the scene so far is unlit: shade it by the light map, then draw everything that emits light on top
+    this.applyLighting(w, view, x0, y0, x1, y1);
+    this.drawLampFixtures(w, view);
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const c = w.tiles[x][y];
       if (c === '~') this.drawGoo(w, x, y);
       else if (c === '|') this.drawFizzler(w, x, y);
+      else if (World.isDoor(c)) this.drawDoorLamp(w, x, y, c.charCodeAt(0) - 97);
+    }
+    for (const c of w.cubes) {
+      const glow = Math.max(c.held ? 1 : 0, c.onButtonGlow, c.teleportFlash);
+      if (!c.gone && !c.dissolving && glow > 0.05) this.drawWithClones(w, c, () => this.drawHolo(snapV(c.pos), glow, c.held ? PP.BlueRamp[2] : PP.OrangeRamp[2]));
     }
     if (w.hasExit) this.drawExitSign(w);
     for (const r of w.receivers) this.drawReceiverGlow(r);
     for (const e of w.emitters) this.drawEmitterGlow(e);
     this.drawLasers(w);
-    this.drawLights(w, view);
     this.drawParticles(w);
     if (drawPortals) for (const p of w.portals) if (p) this.drawPortal(p, w.linked);
   }
@@ -156,22 +165,24 @@ export class Renderer {
     }
   }
 
-  drawLamps(w, view) {
-    const g = this.gfx;
+  lampList(w) {
     const lamps = [];
     for (let x = 3; x < w.w - 3; x += 7)
       for (let y = 1; y < w.h - 4; y++)
         if (!w.isSolid(x, y) && w.isSolid(x, y - 1) && !w.isSolid(x, y + 1) && !w.isSolid(x, y + 2)) { lamps.push([x, y]); break; }
-    g.additive = true;
-    for (const [x, y] of lamps) {
+    return lamps;
+  }
+
+  drawLampFixtures(w, view) {
+    const g = this.gfx;
+    for (const [x, y] of this.lampList(w)) {
       const lx = x * T + T / 2, ly = y * T;
       if (lx < view.x - 300 || lx > view.x + view.w + 300) continue;
-      const flick = 0.9 + 0.1 * Math.sin(this.time * 1.3 + lx);
-      this.castLight(w, lx, ly + 10, 270, C(255, 238, 205, 78 * flick), view);
-      g.circleGrad(lx, ly + 8, 26, C(255, 240, 210, 80), C(255, 240, 210, 0));
+      g.tex(Sprites.lampTex, 0, 0, 14, 4, x * T + 2, y * T, 28, 8);
+      g.additive = true;
+      g.circleGrad(lx, ly + 8, 22, C(255, 244, 220, 170), C(255, 230, 190, 0));
+      g.additive = false;
     }
-    g.additive = false;
-    for (const [x, y] of lamps) g.tex(Sprites.lampTex, 0, 0, 14, 4, x * T + 2, y * T, 28, 8);
   }
 
   // ================================================================ dynamic tiles
@@ -235,14 +246,17 @@ export class Renderer {
       if (bottom && hgt >= 8)
         for (let i = 0; i < 10; i++) g.rect(ox + 6 + i * 2, oy + hgt - 6, 2, 6, Math.trunc(i / 2) % 2 === 0 ? PP.Hazard : C(30, 30, 34));
     }
-    if (top) {
-      const col = w.groupActive[grp] ? PP.Exit : C(255, 80, 70);
-      g.rect(ox + 8, oy - 10, 16, 8, C(22, 24, 30));
-      g.rect(ox + 12, oy - 8, 8, 4, col);
-      g.additive = true;
-      g.circleGrad(ox + 16, oy - 6, 18, withAlpha(col, 90 / 255), withAlpha(col, 0));
-      g.additive = false;
-    }
+    if (top) g.rect(ox + 8, oy - 10, 16, 8, C(22, 24, 30));
+  }
+
+  drawDoorLamp(w, tx, ty, grp) {
+    if (w.at(tx, ty - 1) === String.fromCharCode(97 + grp)) return;
+    const g = this.gfx, ox = tx * T, oy = ty * T;
+    const col = w.groupActive[grp] ? PP.Exit : C(255, 80, 70);
+    g.rect(ox + 12, oy - 8, 8, 4, col);
+    g.additive = true;
+    g.circleGrad(ox + 16, oy - 6, 20, withAlpha(col, 150 / 255), withAlpha(col, 0));
+    g.additive = false;
   }
 
   drawReceiverGlow(r) {
@@ -350,8 +364,6 @@ export class Renderer {
       g.line(a, e, 4, C(225, 245, 255));
       g.line(a, e, 1.5, C(255, 255, 255));
     }
-    const glow = Math.max(c.held ? 1 : 0, c.onButtonGlow, c.teleportFlash);
-    if (glow > 0.05) this.drawHolo(pos, glow, c.held ? PP.BlueRamp[2] : PP.OrangeRamp[2]);
   }
 
   /** A holographic field around a cube: blurred halo, scanlines, a sweeping band, glitchy ghosting and corner brackets. */
@@ -362,21 +374,21 @@ export class Renderer {
     const a = glow * (0.86 + 0.14 * Math.sin(t * 31) * Math.sin(t * 7.3));
     const glitch = hash(Math.trunc(t * 14), 5, 7) > 0.9 ? 2 : 0;
     g.additive = true;
-    g.haloRect(x0, y0, 32, 32, 22, withAlpha(col, 0.5 * a));
-    g.haloRect(x0, y0, 32, 32, 8, withAlpha(hot, 0.55 * a));
-    g.rect(x0, y0, 32, 32, withAlpha(col, 0.16 * a));
-    g.tex(Sprites.cubeTex, 0, 0, 16, 16, x0 + glitch * 2, y0, 32, 32, 0.28 * a);
-    for (let y = 0; y < 32; y += 4) g.rect(x0, y0 + y, 32, 2, withAlpha(col, 0.12 * a));
+    g.haloRect(x0, y0, 32, 32, 16, withAlpha(col, 0.36 * a));
+    g.haloRect(x0, y0, 32, 32, 6, withAlpha(hot, 0.4 * a));
+    g.rect(x0, y0, 32, 32, withAlpha(col, 0.1 * a));
+    g.tex(Sprites.cubeTex, 0, 0, 16, 16, x0 + glitch * 2, y0, 32, 32, 0.18 * a);
+    for (let y = 0; y < 32; y += 4) g.rect(x0, y0 + y, 32, 2, withAlpha(col, 0.07 * a));
     const sweep = ((t * 0.8) % 1) * 44 - 6;
     const sy = Math.max(0, Math.trunc(sweep / 2) * 2), sh = Math.min(32, Math.trunc(sweep / 2) * 2 + 6) - sy;
-    if (sh > 0) g.rect(x0, y0 + sy, 32, sh, withAlpha(hot, 0.3 * a));
+    if (sh > 0) g.rect(x0, y0 + sy, 32, sh, withAlpha(hot, 0.2 * a));
     for (const [cx, cy, sx, sy2] of [[x0 - 2, y0 - 2, 1, 1], [x0 + 34, y0 - 2, -1, 1], [x0 - 2, y0 + 34, 1, -1], [x0 + 34, y0 + 34, -1, -1]]) {
-      g.rect(sx > 0 ? cx : cx - 8, sy2 > 0 ? cy : cy - 2, 8, 2, withAlpha(hot, 0.9 * a));
-      g.rect(sx > 0 ? cx : cx - 2, sy2 > 0 ? cy : cy - 8, 2, 8, withAlpha(hot, 0.9 * a));
+      g.rect(sx > 0 ? cx : cx - 8, sy2 > 0 ? cy : cy - 2, 8, 2, withAlpha(hot, 0.7 * a));
+      g.rect(sx > 0 ? cx : cx - 2, sy2 > 0 ? cy : cy - 8, 2, 8, withAlpha(hot, 0.7 * a));
     }
-    for (let k = 0; k < 4; k++) {
-      const tt = (t * 0.6 + k * 0.25) % 1;
-      const mx = x0 + 2 + Math.trunc(hash(k, Math.trunc(t * 0.6 + k * 0.25), 11) * 14) * 2;
+    for (let k = 0; k < 3; k++) {
+      const tt = (t * 0.6 + k * 0.33) % 1;
+      const mx = x0 + 2 + Math.trunc(hash(k, Math.trunc(t * 0.6 + k * 0.33), 11) * 14) * 2;
       g.rect(mx, y0 + 34 - Math.trunc(tt * 15) * 2, 2, 2, withAlpha(hot, a * Math.sin(tt * Math.PI)));
     }
     g.additive = false;
@@ -429,48 +441,41 @@ export class Renderer {
     if (w.lasers.length === 0) return;
     const g = this.gfx;
     const flick = Math.trunc(this.time * 30) % 7 === 0;
+    const k = flick ? 0.75 : 1;
     for (const s of w.lasers) {
-      const x0 = Math.min(s.a.x, s.b.x), x1 = Math.max(s.a.x, s.b.x);
-      const y0 = Math.min(s.a.y, s.b.y), y1 = Math.max(s.a.y, s.b.y);
+      const x0 = Math.trunc(Math.min(s.a.x, s.b.x)), x1 = Math.trunc(Math.max(s.a.x, s.b.x));
+      const y0 = Math.trunc(Math.min(s.a.y, s.b.y)), y1 = Math.trunc(Math.max(s.a.y, s.b.y));
       const horiz = y1 - y0 < x1 - x0;
       g.additive = true;
-      const k = flick ? 0.65 : 1;
       if (horiz) {
-        g.glowBand(Math.trunc(x0), Math.trunc(snap(y0)) - 28, Math.trunc(x1 - x0), 56, false, C(255, 40, 40, 70 * k));
-        g.glowBand(Math.trunc(x0), Math.trunc(snap(y0)) - 11, Math.trunc(x1 - x0), 22, false, C(255, 90, 70, 110 * k));
+        const y = Math.trunc(snap(y0));
+        g.glowBand(x0, y - 36, x1 - x0, 72, false, C(255, 30, 30, 85 * k));
+        g.glowBand(x0, y - 14, x1 - x0, 28, false, C(255, 70, 60, 150 * k));
       } else {
-        g.glowBand(Math.trunc(snap(x0)) - 28, Math.trunc(y0), 56, Math.trunc(y1 - y0), true, C(255, 40, 40, 70 * k));
-        g.glowBand(Math.trunc(snap(x0)) - 11, Math.trunc(y0), 22, Math.trunc(y1 - y0), true, C(255, 90, 70, 110 * k));
+        const x = Math.trunc(snap(x0));
+        g.glowBand(x - 36, y0, 72, y1 - y0, true, C(255, 30, 30, 85 * k));
+        g.glowBand(x - 14, y0, 28, y1 - y0, true, C(255, 70, 60, 150 * k));
       }
       g.additive = false;
       if (horiz) {
-        g.rect(Math.trunc(x0), Math.trunc(snap(y0)) - 2, Math.trunc(x1 - x0), 6, PP.Laser);
-        g.rect(Math.trunc(x0), Math.trunc(snap(y0)), Math.trunc(x1 - x0), 2, PP.LaserCore);
+        g.rect(x0, Math.trunc(snap(y0)) - 2, x1 - x0, 6, PP.Laser);
+        g.rect(x0, Math.trunc(snap(y0)), x1 - x0, 2, PP.LaserCore);
       } else {
-        g.rect(Math.trunc(snap(x0)) - 2, Math.trunc(y0), 6, Math.trunc(y1 - y0), PP.Laser);
-        g.rect(Math.trunc(snap(x0)), Math.trunc(y0), 2, Math.trunc(y1 - y0), PP.LaserCore);
+        g.rect(Math.trunc(snap(x0)) - 2, y0, 6, y1 - y0, PP.Laser);
+        g.rect(Math.trunc(snap(x0)), y0, 2, y1 - y0, PP.LaserCore);
       }
     }
-    // energy pulses racing along each beam
     g.additive = true;
-    for (const s of w.lasers) {
-      const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, len = Math.hypot(dx, dy);
-      if (len < 8) continue;
-      const ux = dx / len, uy = dy / len;
-      for (let d = (this.time * 260) % 72; d < len; d += 72) {
-        const px = Math.trunc(snap(s.a.x + ux * d)), py = Math.trunc(snap(s.a.y + uy * d));
-        g.rect(px - 2, py - 2, 6, 4, C(255, 220, 210, 90));
-        g.circleGrad(px + 1, py, 9, C(255, 200, 180, 90), C(255, 80, 60, 0));
-      }
-    }
     for (const imp of w.laserImpacts) {
-      g.circleGrad(imp.x, imp.y, flick ? 18 : 24, C(255, 120, 90, 230), C(255, 40, 40, 0));
-      g.circleGrad(imp.x, imp.y, flick ? 7 : 9, C(255, 245, 235, 255), C(255, 150, 120, 0));
+      g.circleGrad(imp.x, imp.y, flick ? 30 : 38, C(255, 90, 70, 220), C(255, 30, 30, 0));
+      g.circleGrad(imp.x, imp.y, flick ? 9 : 12, C(255, 245, 235, 255), C(255, 150, 120, 0));
     }
     g.additive = false;
   }
 
   // ================================================================ lighting
+  // Every light ray-casts against the tile grid (and the player and cubes) to find what it can see; the visible
+  // areas are painted into a half-res light map over a dark ambient, which then multiplies the finished scene.
 
   /** Distance from (ox, oy) along (dx, dy) to the first solid tile, capped at maxD (grid walk). */
   rayDist(w, ox, oy, dx, dy, maxD) {
@@ -487,59 +492,130 @@ export class Renderer {
     }
   }
 
-  /** A point light that is blocked by walls: casts rays to build the lit area, then fills it with a soft falloff. Draw it additively. */
+  /** Distance to the nearest character/cube box along the ray (boxes the light sits inside are ignored). */
+  boxDist(ox, oy, dx, dy, maxD) {
+    let best = maxD;
+    for (const b of this.occluders) {
+      if (ox > b.x0 && ox < b.x1 && oy > b.y0 && oy < b.y1) continue;
+      let t0 = 0, t1 = best;
+      if (dx !== 0) { let a = (b.x0 - ox) / dx, c = (b.x1 - ox) / dx; if (a > c) [a, c] = [c, a]; t0 = Math.max(t0, a); t1 = Math.min(t1, c); }
+      else if (ox < b.x0 || ox > b.x1) continue;
+      if (dy !== 0) { let a = (b.y0 - oy) / dy, c = (b.y1 - oy) / dy; if (a > c) [a, c] = [c, a]; t0 = Math.max(t0, a); t1 = Math.min(t1, c); }
+      else if (oy < b.y0 || oy > b.y1) continue;
+      if (t0 <= t1 && t0 < best) best = t0;
+    }
+    return best;
+  }
+
+  /** Queues a point light that walls and characters block. */
   castLight(w, x, y, r, col, view) {
     if (col.a < 2 || r <= 0) return;
     if (x + r < view.x || x - r > view.x + view.w || y + r < view.y || y - r > view.y + view.h) return;
     if (w.isSolid(Math.floor(x / T), Math.floor(y / T))) return;
-    const n = clamp(Math.round(r / 3), 24, 80), pts = [];
+    const n = clamp(Math.round(r / 3.5), 28, 72), pts = [];
     for (let i = 0; i < n; i++) {
       const ang = (i + 0.37) / n * Math.PI * 2, dx = Math.cos(ang), dy = Math.sin(ang);
-      const d = Math.min(r, this.rayDist(w, x, y, dx, dy, r) + 10);
+      const d = Math.min(r, this.rayDist(w, x, y, dx, dy, r) + 14, this.boxDist(x, y, dx, dy, r) + 4);
       pts.push({ x: x + dx * d, y: y + dy * d });
     }
-    this.gfx.lightPoly(pts, x, y, r, col);
+    this.lights.push({ pts, x, y, r, col });
   }
 
-  /** Like castLight, but for sources sitting on a wall surface: nudges the origin out into open air first. */
+  /** Like castLight, but for sources sitting in a wall surface: nudges the origin out into open air first. */
   castLightNear(w, x, y, r, col, view, nudge = 8) {
     if (!w.isSolid(Math.floor(x / T), Math.floor(y / T))) return this.castLight(w, x, y, r, col, view);
     for (const [ox, oy] of [[0, -1], [0, 1], [-1, 0], [1, 0]])
       if (!w.isSolid(Math.floor((x + ox * nudge) / T), Math.floor((y + oy * nudge) / T))) return this.castLight(w, x + ox * nudge, y + oy * nudge, r, col, view);
   }
 
-  /** Real-feeling light from everything that glows: portals, beams, receivers, buttons, the exit and charged cubes. */
-  drawLights(w, view) {
-    const g = this.gfx, t = this.time;
-    g.additive = true;
+  collectLights(w, view, x0, y0, x1, y1) {
+    const t = this.time;
+    this.lights.length = 0;
+    this.occluders.length = 0;
+    for (const c of w.cubes) if (!c.gone && !c.dissolving) { const r = c.rect; this.occluders.push({ x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }); }
+    const pl = w.player;
+    if (pl && !pl.dead) { const r = pl.rect; this.occluders.push({ x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }); }
+
+    for (const [x, y] of this.lampList(w)) {
+      const lx = x * T + T / 2, ly = y * T;
+      const flick = 0.93 + 0.07 * Math.sin(t * 1.3 + lx) + (Math.trunc(t * 9 + lx) % 41 === 0 ? -0.15 : 0);
+      this.castLight(w, lx, ly + 10, 300, C(255, 238, 205, 240 * flick), view);
+    }
     for (const p of w.portals) {
       if (!p || p.open < 0.05) continue;
       const open = easeOutBack(p.open), col = p.color === PortalColor.Blue ? PP.BlueRamp[2] : PP.OrangeRamp[2];
-      const pulse = 1 + 0.05 * Math.sin(t * 5 + p.color);
-      this.castLight(w, p.center.x + p.normal.x * 10, p.center.y + p.normal.y * 10, 170 * open * pulse, withAlpha(col, 0.5), view);
-      this.castLight(w, p.center.x + p.normal.x * 6, p.center.y + p.normal.y * 6, 60 * open, withAlpha(mix(col, C(255, 255, 255), 0.5), 0.35), view);
+      const pulse = 1 + 0.06 * Math.sin(t * 5 + p.color);
+      this.castLight(w, p.center.x + p.normal.x * 10, p.center.y + p.normal.y * 10, 230 * open * pulse, withAlpha(col, 0.95), view);
+      this.castLight(w, p.center.x + p.normal.x * 6, p.center.y + p.normal.y * 6, 70 * open, withAlpha(mix(col, C(255, 255, 255), 0.6), 0.8), view);
     }
     for (const s of w.lasers) {
       const len = Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y);
-      const n = clamp(Math.floor(len / 56), 1, 12);
+      const n = clamp(Math.floor(len / 44), 1, 16);
       for (let k = 0; k < n; k++) {
         const f = (k + 0.5) / n;
-        this.castLight(w, s.a.x + (s.b.x - s.a.x) * f, s.a.y + (s.b.y - s.a.y) * f, 70, C(255, 50, 40, 30), view);
+        this.castLight(w, s.a.x + (s.b.x - s.a.x) * f, s.a.y + (s.b.y - s.a.y) * f, 96, C(255, 40, 30, 62), view);
       }
     }
-    for (const imp of w.laserImpacts) this.castLightNear(w, imp.x, imp.y, 96, C(255, 90, 60, 120), view, 6);
-    for (const e of w.emitters) this.castLight(w, e.x * T + 16 + e.dir.x * 20, e.y * T + 16 + e.dir.y * 20, 110, C(255, 60, 50, 70), view);
-    for (const r of w.receivers) if (r.glow > 0.02) this.castLightNear(w, r.x * T + 16, r.y * T + 16, 120, C(255, 170, 90, 120 * r.glow), view, 20);
-    for (const b of w.buttons) if (b.press > 0.05) this.castLight(w, b.x * T + 16, (b.y + 1) * T - 14, 110, C(255, 150, 70, 90 * b.press), view);
+    for (const imp of w.laserImpacts) this.castLightNear(w, imp.x, imp.y, 130, C(255, 90, 50, 215), view, 6);
+    for (const e of w.emitters) this.castLight(w, e.x * T + 16 + e.dir.x * 20, e.y * T + 16 + e.dir.y * 20, 120, C(255, 50, 40, 150), view);
+    for (const r of w.receivers) if (r.glow > 0.02) this.castLightNear(w, r.x * T + 16, r.y * T + 16, 150, C(255, 170, 90, 210 * r.glow), view, 20);
+    for (const b of w.buttons) if (b.press > 0.05) this.castLight(w, b.x * T + 16, (b.y + 1) * T - 14, 130, C(255, 150, 70, 190 * b.press), view);
     if (w.hasExit) {
       const x = w.exit.x * T + T / 2, yb = (w.exit.y + 1) * T;
-      this.castLight(w, x, yb - 34, w.exitReady ? 170 : 90, w.exitReady ? C(90, 255, 160, 80) : C(255, 190, 80, 24), view);
+      this.castLight(w, x, yb - 34, w.exitReady ? 220 : 110, w.exitReady ? C(80, 255, 150, 190) : C(255, 190, 80, 60), view);
     }
     for (const c of w.cubes) {
       const glow = Math.max(c.held ? 1 : 0, c.onButtonGlow, c.teleportFlash);
       if (c.gone || glow < 0.05) continue;
-      this.castLight(w, c.pos.x, c.pos.y, 90, withAlpha(c.held ? PP.BlueRamp[2] : PP.OrangeRamp[2], 0.38 * glow), view);
+      this.castLight(w, c.pos.x, c.pos.y, 120, withAlpha(c.held ? PP.BlueRamp[2] : PP.OrangeRamp[2], 0.7 * glow), view);
     }
+    if (pl && !pl.dead) {
+      // a faint glow around the player so they are never lost in the dark, plus the gun's muzzle light
+      this.castLight(w, pl.pos.x, pl.pos.y - 6, 150, C(190, 205, 255, 70), view);
+      const gunCol = pl.lastShot === PortalColor.Blue ? PP.BlueRamp[2] : PP.OrangeRamp[2];
+      this.castLight(w, pl.pos.x + pl.aim.x * 24, pl.pos.y - 6 + pl.aim.y * 24, 90 + pl.gunKick * 70, withAlpha(gunCol, 0.3 + pl.gunKick * 0.6), view);
+    }
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const c = w.tiles[x][y];
+      if (c === '~' && w.at(x, y - 1) !== '~' && x % 2 === 0) this.castLight(w, x * T + 16, y * T - 2, 100, C(120, 255, 60, 90), view);
+      else if (c === '|' && x % 1 === 0 && y % 2 === 0) this.castLight(w, x * T + 16, y * T + 16, 90, C(70, 150, 255, 80), view);
+      else if (World.isDoor(c)) {
+        const grp = c.charCodeAt(0) - 97;
+        if (w.at(x, y - 1) !== c) this.castLight(w, x * T + 16, y * T - 6, 80, w.groupActive[grp] ? C(80, 255, 140, 120) : C(255, 60, 50, 120), view);
+      }
+    }
+  }
+
+  applyLighting(w, view, x0, y0, x1, y1) {
+    this.collectLights(w, view, x0, y0, x1, y1);
+    const g = this.gfx, main = g.canvas, mctx = g.ctx, saved = g.m;
+    const k = this.lightCanvas.width / main.width;
+    g.setTarget(this.lightCanvas);
+    g.clear(PP.Ambient);
+    g.m = saved.map((v) => v * k);
+    g.additive = true;
+    for (const l of this.lights) g.lightPoly(l.pts, l.x, l.y, l.r, l.col);
+    g.additive = false;
+    g.m = saved;
+    g.setTarget(main);
+    mctx.setTransform(1, 0, 0, 1, 0, 0);
+    mctx.globalAlpha = 1;
+    mctx.imageSmoothingEnabled = true;
+    mctx.globalCompositeOperation = 'multiply';
+    mctx.drawImage(this.lightCanvas, 0, 0, main.width, main.height);
+    mctx.globalCompositeOperation = 'source-over';
+    mctx.imageSmoothingEnabled = false;
+    // the light map means 0.5 = the art's own colour: doubling lets strong lights push surfaces brighter than the art
+    if (!this.scratch || this.scratch.width !== main.width || this.scratch.height !== main.height) this.scratch = makeCanvas(main.width, main.height);
+    const sctx = this.scratch.getContext('2d');
+    sctx.globalCompositeOperation = 'copy';
+    sctx.drawImage(main, 0, 0);
+    mctx.globalCompositeOperation = 'lighter';
+    mctx.drawImage(this.scratch, 0, 0);
+    mctx.globalCompositeOperation = 'source-over';
+    // lit surfaces also pick up a little of the light's colour on top (a cheap bloom)
+    g.additive = true;
+    for (const l of this.lights) g.lightPoly(l.pts, l.x, l.y, l.r, withAlpha(l.col, l.col.a / 255 * 0.22));
     g.additive = false;
   }
 
@@ -680,7 +756,11 @@ export class Renderer {
     const any = (w.player && !w.player.dead && overlaps(w.player.rect, lensRect)) || w.cubes.some((cb) => !cb.gone && overlaps(cb.rect, lensRect));
     if (!any) return;
     g.clip(sx, sy, sw, sh);
-    for (const cb of w.cubes) this.drawWithClones(w, cb, () => this.drawCube(cb));
+    for (const cb of w.cubes) {
+      this.drawWithClones(w, cb, () => this.drawCube(cb));
+      const glow = Math.max(cb.held ? 1 : 0, cb.onButtonGlow, cb.teleportFlash);
+      if (!cb.gone && !cb.dissolving && glow > 0.05) this.drawWithClones(w, cb, () => this.drawHolo(snapV(cb.pos), glow, cb.held ? PP.BlueRamp[2] : PP.OrangeRamp[2]));
+    }
     if (w.player) this.drawWithClones(w, w.player, () => this.drawPlayer(w.player));
     g.unclip();
   }
