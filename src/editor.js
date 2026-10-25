@@ -9,7 +9,7 @@ import { CustomMaps, cleanName, MIN_W, MIN_H, MAX_W, MAX_H, MAX_NAME } from './m
 
 const T = K.Tile;
 
-const SECTIONS = ['BLOCKS', 'GEL AND PLATES', 'OBJECTS', 'WIRING', 'LASERS'];
+const SECTIONS = ['BLOCKS', 'GEL AND PLATES', 'OBJECTS', 'WIRING', 'LASERS AND HAZARDS'];
 
 // wire: 0 button, 1 timed button, 2 door, 3 laser target (these take the number picked below the tools)
 const tool = (id, name, help, ch, section, o = {}) => ({ id, name, help, ch, section, wire: o.wire ?? -1, fillable: !!o.fillable, unique: !!o.unique });
@@ -41,6 +41,9 @@ const TOOLS = [
   tool('laserL', 'LASER LEFT', 'SHOOTS A LASER TO THE LEFT.', '<', 4),
   tool('laserU', 'LASER UP', 'SHOOTS A LASER UP.', '^', 4),
   tool('laserD', 'LASER DOWN', 'SHOOTS A LASER DOWN.', 'v', 4),
+  tool('turret', 'SENTRY TURRET', 'SHOOTS YOU IF IT CAN SEE YOU. BREAK ITS LINE OF SIGHT WITH A CUBE OR A WALL.', 'S', 4),
+  tool('liftU', 'LIFT BEAM', 'CARRIES YOU AND CUBES UP TO THE CEILING.', 'B', 4),
+  tool('liftD', 'PUSH BEAM', 'SHOVES YOU AND CUBES DOWN.', 'D', 4),
 ];
 const byId = (id) => TOOLS.find((t) => t.id === id);
 
@@ -543,7 +546,12 @@ export class MapEditor {
     g.rectR(panel, C(14, 16, 22, 245));
     g.rect(236, 64, 2, panel.h, PANEL_EDGE);
 
-    let y = 76;
+    // the palette scrolls with the mouse wheel when there are more tools than fit
+    const inPanel = this.live && contains(panel, UI.mouse);
+    if (inPanel) this.palScroll = clamp((this.palScroll || 0) + Input.wheelY * 40, 0, this.palMax || 0);
+    this.palScroll = clamp(this.palScroll || 0, 0, this.palMax || 0);
+    g.clip(0, panel.y * K.Px, panel.w * K.Px, panel.h * K.Px);
+    let y = 76 - this.palScroll;
     UI.text('BRUSH', V(14, y), 16, C(130, 138, 152));
     y += 22;
     const brushes = [
@@ -566,7 +574,7 @@ export class MapEditor {
         const t = inSec[i];
         const r = R(14 + (i % 4) * 54, y + Math.floor(i / 4) * 52, 46, 46);
         const sel = this.tool === t;
-        const over = this.live && contains(r, UI.mouse);
+        const over = inPanel && contains(r, UI.mouse);
         g.rect(r.x + 2, r.y + 3, 46, 46, C(0, 0, 0, 100));
         g.rectR(r, sel ? C(60, 50, 40) : over ? C(46, 52, 66) : C(28, 31, 40));
         g.rectLines(r, 2, sel ? PP.OrangeRamp[2] : over ? PP.BlueRamp[2] : C(58, 65, 80));
@@ -593,6 +601,12 @@ export class MapEditor {
         }
         y += 40;
       } else y += 2;
+    }
+    g.unclip();
+    this.palMax = Math.max(0, y + this.palScroll - (panel.y + panel.h) + 14);
+    if (this.palMax > 0) {
+      const th = Math.max(30, (panel.h - 8) * panel.h / (panel.h + this.palMax));
+      g.rect(231, panel.y + 4 + (panel.h - 8 - th) * (this.palScroll / this.palMax), 3, th, C(90, 100, 120, 200));
     }
     return hoverHelp;
   }
@@ -789,6 +803,17 @@ function toolIcon(g, t, group, r, a) {
       P(1, 1, 14, 14, PP.Metal); P(1, 1, 14, 1, PP.MetalHi); P(1, 14, 14, 1, PP.MetalLo);
       P(4, 4, 8, 8, C(60, 20, 20)); P(5, 5, 6, 6, C(150, 40, 40)); P(6, 6, 4, 4, PP.Laser); P(7, 7, 2, 2, PP.LaserCore);
       break;
+    case 'turret':
+      P(1, 1, 14, 14, PP.Metal); P(1, 1, 14, 1, PP.MetalHi); P(1, 14, 14, 1, PP.MetalLo); P(3, 3, 10, 10, C(14, 15, 19));
+      P(5, 5, 6, 6, C(110, 118, 138)); P(6, 6, 4, 4, C(60, 18, 14)); P(7, 7, 2, 2, PP.Laser);
+      break;
+    case 'liftU': case 'liftD': {
+      const up = id === 'liftU', col = up ? PP.BlueRamp : PP.OrangeRamp;
+      P(1, 1, 14, 14, PP.Metal); P(1, 1, 14, 1, PP.MetalHi); P(1, 14, 14, 1, PP.MetalLo);
+      P(4, up ? 1 : 10, 8, 5, C(29, 31, 38)); P(5, up ? 1 : 12, 6, 3, col[2]);
+      for (let i = 0; i < 3; i++) { P(5 + i, up ? 9 - i * 2 : 5 + i * 2, 2, 2, col[3]); P(9 - i, up ? 9 - i * 2 : 5 + i * 2, 2, 2, col[3]); }
+      break;
+    }
     case 'laserR': case 'laserL': case 'laserU': case 'laserD':
       P(1, 1, 14, 14, PP.Metal); P(1, 1, 14, 1, PP.MetalHi); P(1, 14, 14, 1, PP.MetalLo); P(3, 3, 10, 10, PP.MetalMid);
       switch (id) {

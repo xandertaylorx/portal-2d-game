@@ -296,7 +296,7 @@ export const THEMES = [
 ];
 export const THEME_COUNT = 7;
 
-const staticSolid = (c) => '#X<>^vJQqG'.includes(c) || World.isReceiver(c);
+const staticSolid = (c) => '#X<>^vJQqGSBD'.includes(c) || World.isReceiver(c);
 
 /**
  * Bakes the static parts of a level into two pixel buffers (16 px per tile): the back wall (behind everything) and
@@ -425,6 +425,8 @@ export class LevelArt {
       case 'J': this.metal(w, tx, ty); this.gel(w, tx, ty, PP.Gel, C(166, 220, 255), C(28, 95, 184), C(20, 60, 120), false); return;
       case 'G': this.metal(w, tx, ty); this.gel(w, tx, ty, PP.SpeedGel, C(255, 214, 150), C(180, 70, 10), C(120, 40, 5), true); return;
       case 'Q': case 'q': this.metal(w, tx, ty); this.plate(tx, ty, c === 'Q'); return;
+      case 'S': this.metal(w, tx, ty); this.turretBase(tx, ty); return;
+      case 'B': case 'D': this.metal(w, tx, ty); this.liftEmitter(tx, ty, c === 'B'); return;
       default:
         if (World.isReceiver(c)) { this.metal(w, tx, ty); this.receiver(tx, ty); }
     }
@@ -521,6 +523,29 @@ export class LevelArt {
       case 'v': f.rect(ox + 3, oy + 11, 10, 5, house); f.rect(ox + 5, oy + 14, 6, 2, PP.Laser); f.rect(ox + 7, oy + 15, 2, 1, PP.LaserCore); break;
       case '^': f.rect(ox + 3, oy, 10, 5, house); f.rect(ox + 5, oy, 6, 2, PP.Laser); f.rect(ox + 7, oy, 2, 1, PP.LaserCore); break;
     }
+  }
+
+  /** The sentry's housing: a dark socket the animated eye is drawn into. */
+  turretBase(tx, ty) {
+    const f = this.front, ox = tx * P, oy = ty * P;
+    f.rect(ox + 1, oy + 1, P - 2, P - 2, C(34, 37, 46));
+    f.rect(ox + 1, oy + 1, P - 2, 1, PP.MetalHi);
+    f.rect(ox + 1, oy + P - 2, P - 2, 1, PP.MetalLo);
+    for (const [x, y] of [[2, 2], [12, 2], [2, 12], [12, 12]]) f.rect(ox + x, oy + y, 2, 2, PP.MetalMid);
+    for (let y = 0; y < P; y++) for (let x = 0; x < P; x++) {
+      const d = Math.hypot(x - 7.5, y - 7.5);
+      if (d < 5.6) f.set(ox + x, oy + y, C(14, 15, 19));
+      else if (d < 6.6) f.set(ox + x, oy + y, C(110, 118, 138));
+    }
+  }
+
+  /** A lift (up) or push (down) beam emitter: a lens on the face the beam leaves from. */
+  liftEmitter(tx, ty, up) {
+    const f = this.front, ox = tx * P, oy = ty * P, col = up ? PP.BlueRamp[2] : PP.OrangeRamp[2], deep = up ? PP.BlueRamp[0] : PP.OrangeRamp[0];
+    f.rect(ox + 2, up ? oy : oy + P - 5, P - 4, 5, C(29, 31, 38));
+    f.rect(ox + 4, up ? oy : oy + P - 3, P - 8, 3, deep);
+    f.rect(ox + 5, up ? oy : oy + P - 2, P - 10, 2, col);
+    f.rect(ox + 7, up ? oy : oy + P - 1, 2, 1, C(255, 255, 255));
   }
 
   receiver(tx, ty) {

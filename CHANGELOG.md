@@ -2,6 +2,26 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.15.0] - 2026-10-25
+
+### Added
+- **Watch Solution.** The pause menu can replay a chamber's reference solution as a ghost that walks the route for you.
+  Runs that use it don't earn a medal.
+- **Par times and medals.** Every chamber has a par time. Beat it for gold, come within half again for silver, or
+  finish for bronze. Medals show on the chamber select screen and on the results screen.
+- **Best-run ghost.** Race a translucent copy of your fastest run. Press G to hide or show it.
+- **Sentry turrets**, **lift beams** and **push beams** in the map builder (under Lasers and Hazards). Turrets lock on, charge
+  and fire when they can see you, so break their line of sight with a wall or a cube. Beams carry you and cubes up or down.
+- The map builder's tool palette scrolls with the mouse wheel.
+
+### Changed
+- **Light shafts and dust.** Lamps now cast volumetric shafts that stop where they hit the floor, with dust drifting through.
+- Glass panes glint, and lights leave glossy reflections on the floor beneath them.
+- The camera leads toward where you are heading and looks down when you fall fast.
+- Heavy landings and very fast portal exits shake the screen and freeze the action for a split second.
+- **Reactive audio.** A hum rises as you near laser beams and portals, wind builds with your speed, and the whole mix
+  muffles and clears after a portal trip, with the whoosh pitched by your exit speed.
+
 ## [2.14.0] - 2026-10-25
 
 ### Changed

@@ -19,6 +19,9 @@ export class SaveData {
     this.cones = true; this.shake = true; this.fullscreen = false;
     this.totalDeaths = 0; this.randomBestStreak = 0; this.randomCleared = 0;
     this.oneClickPortals = false; this.editorHelpSeen = false;
+    this.ghostOn = true;         // show the ghost of your best run
+    this.ghosts = {};            // best-run recordings keyed by chamber name
+    this.medals = {};            // 1 bronze, 2 silver, 3 gold, keyed by chamber name
     this.look = { ...DEFAULT_LOOK };   // character customiser: colour, hat, face, outfit
     this.best = [];
     this.names = [];
@@ -51,7 +54,7 @@ export class SaveData {
 
 export const MIN_W = 12, MIN_H = 10, MAX_W = 90, MAX_H = 45, MAX_NAME = 24;
 /** Every tile character a player-made map may contain (no fixed-portal markers). */
-const ALLOWED = ' #X=~|PECabcdef123xyz456rst<>^vJGQqMNTUVWYZ';
+const ALLOWED = ' #X=~|PECabcdef123xyz456rst<>^vJGQqMNTUVWYZSBD';
 const CODE_PREFIX = 'P2D1:';
 
 const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('');

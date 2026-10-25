@@ -2,7 +2,7 @@
 import {
   K, C, withAlpha, clamp, clamp01, approach, lerp, smoothStep, easeOutCubic, contains, V, R, roundEven, WHITE,
 } from './core.js';
-import { World, makeDef, emptyInput, GunMode } from './world.js';
+import { World, makeDef, emptyInput, GunMode, Sfx } from './world.js';
 import { PP, Sprites, COLORS, HATS, FACE_NAMES, OUTFIT_NAMES, DEFAULT_LOOK, cleanLook, PLAYER_H } from './art.js';
 import { Gfx, PixelFont } from './gfx.js';
 import { Renderer } from './render.js';
@@ -11,10 +11,11 @@ import { UI, Align, Icons } from './ui.js';
 import { Input } from './input.js';
 import { SaveData, CustomMap, CustomMaps } from './maps.js';
 import { MapEditor } from './editor.js';
+import { GhostRecorder, GhostPlayback, SolutionGhost } from './ghost.js';
 import { MapLibrary } from './library.js';
 import { pickRandomTest } from './random.js';
 
-export const VERSION = '2.14.0';
+export const VERSION = '2.15.0';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 
@@ -55,6 +56,10 @@ export class App {
     this.cam = { offset: V(K.CanvasW / 2, K.CanvasH / 2), target: V(0, 0), zoom: K.Px };
     this.camPos = V(this.menuWorld.widthPx / 2, this.menuWorld.heightPx / 2);
     this.shake = 0;
+    this.rec = new GhostRecorder(); this.bestGhost = null; this.solution = null; this.showSolution = false; this.usedSolution = false; this.medal = 0;
+    this.pars = null; this.solutions = null;
+    fetch('data/pars.json').then((r) => r.json()).then((j) => { this.pars = j; }).catch(() => {});
+    this.hitstop = 0;   // freeze-frame: seconds of sim to skip after a heavy impact
 
     this.paused = false; this.showIntro = false;
     this.time = 0; this.stateT = 0; this.levelTime = 0; this.wonT = 0; this.hintT = 0; this.hintEnd = 10; this.accumulator = 0;
@@ -205,7 +210,9 @@ export class App {
         // once the player gets going, let the hints get out of the way
         const hp = w.player;
         if (hp && this.hintT > 4 && this.hintEnd > this.hintT + 1.2 && Math.hypot(hp.pos.x - this.startPos.x, hp.pos.y - this.startPos.y) > 220) this.hintEnd = this.hintT + 1.2;
+        if (Input.pressed('KeyG') && this.bestGhost) { this.save.ghostOn = !this.save.ghostOn; this.save.store(); this.showToast(this.save.ghostOn ? 'BEST-RUN GHOST ON' : 'BEST-RUN GHOST OFF'); }
         this.step(w, dt, this.readInput(), false);
+        if (this.solution && w.player && !w.player.dead && !w.player.won) this.solution.advance(dt);
         this.hintT += dt;
 
         const p = w.player;
@@ -253,6 +260,7 @@ export class App {
   }
 
   step(w, dt, input, silent) {
+    if (this.hitstop > 0) { this.hitstop -= dt; if (!silent) this.audioScene(w); return; }
     this.accumulator += dt;
     // one-frame presses are latched until a sim step consumes them, so frames that run no step don't swallow a jump
     const pd = this.pend;
@@ -262,15 +270,33 @@ export class App {
       const i = { ...input, jumpPressed: first && pd.jump, usePressed: first && pd.use, fireBlue: first && pd.blue, fireOrange: first && pd.orange, fireCycle: first && pd.cycle };
       if (first) pd.jump = pd.use = pd.blue = pd.orange = pd.cycle = false;
       w.update(K.SimDt, i);
+      if (!silent && w.player && !w.player.won) this.rec.step(w.player);
       first = false;
       this.accumulator -= K.SimDt;
     }
     if (this.accumulator > K.SimDt * 10) this.accumulator = 0;
     for (const e of w.events) {
-      if (!silent) this.audio.play(e.sound, e.pos, this.camPos);
-      if (!silent && this.save.shake) this.shake = Math.max(this.shake, e.shake);
+      if (!silent) this.audio.play(e.sound, e.pos, this.camPos, e.pitch);
+      if (!silent && e.sound === Sfx.Teleport) this.audio.muffle(clamp01((e.pitch - 0.8) / 0.6) * 0.6 + 0.3);
+      if (!silent && this.save.shake) { this.shake = Math.max(this.shake, e.shake); if (e.freeze) this.hitstop = Math.max(this.hitstop, e.freeze); }
     }
     w.events.length = 0;
+    if (!silent) this.audioScene(w);
+  }
+
+  /** Feeds the reactive audio layers: beam hum near lasers, portal hum near portals, wind with speed. */
+  audioScene(w) {
+    const p = w.player;
+    if (!p || p.dead || this.paused) { this.audio.setScene({ laser: 0, portal: 0, speed: 0 }); return; }
+    let laser = 0, portal = 0;
+    for (const s of w.lasers) {
+      const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, l2 = dx * dx + dy * dy || 1;
+      const t = clamp(((p.pos.x - s.a.x) * dx + (p.pos.y - s.a.y) * dy) / l2, 0, 1);
+      laser = Math.max(laser, 1 - clamp(Math.hypot(p.pos.x - (s.a.x + dx * t), p.pos.y - (s.a.y + dy * t)) / 420, 0, 1));
+    }
+    if (w.linked) for (const q of w.portals) if (q) portal = Math.max(portal, (1 - clamp(Math.hypot(p.pos.x - q.center.x, p.pos.y - q.center.y) / 380, 0, 1)) * clamp01(q.open));
+    const speed = clamp((Math.hypot(p.vel.x, p.vel.y) - 500) / 900, 0, 1);
+    this.audio.setScene({ laser: laser * laser, portal: Math.min(1, portal), speed });
   }
 
   playZoom() {
@@ -280,6 +306,11 @@ export class App {
   followPlayer(dt, snap) {
     const w = this.world, p = w.player;
     const target = p ? V(p.pos.x, p.pos.y - 24) : V(w.widthPx / 2, w.heightPx / 2);
+    // lead the camera toward where the player is heading: sideways with run speed, downward when falling fast
+    if (p && !p.dead && !p.won) {
+      this.lead = V(lerp(this.lead?.x ?? 0, clamp(p.vel.x * 0.2, -110, 110), snap ? 1 : 1 - Math.exp(-dt * 3)), lerp(this.lead?.y ?? 0, p.vel.y > 500 ? clamp((p.vel.y - 500) * 0.14, 0, 110) : p.vel.y < -500 ? clamp((p.vel.y + 500) * 0.1, -70, 0) : 0, snap ? 1 : 1 - Math.exp(-dt * 3)));
+      target.x += this.lead.x; target.y += this.lead.y;
+    }
     const viewW = K.ScreenW, viewH = K.ScreenH;
     // Clamp the follow position before looking: otherwise looking up at the bottom of a tall room does nothing.
     target.x = w.widthPx <= viewW ? w.widthPx / 2 : clamp(target.x, viewW / 2, w.widthPx - viewW / 2);
@@ -349,8 +380,32 @@ export class App {
     else this.showIntro = false;
     this.paused = false;
     this.accumulator = 0;
+    this.rec.reset();
+    this.setupGhosts(fresh);
+    this.hitstop = 0;
+    this.lead = V(0, 0);
     this.followPlayer(0, true);
     this.updateCam(0, this.playZoom());
+  }
+
+  /** Loads the saved best-run ghost for this chamber and (if asked for) the reference solution ghost. */
+  setupGhosts(fresh) {
+    if (fresh) { this.showSolution = false; this.usedSolution = false; }
+    this.bestGhost = null; this.solution = null;
+    if (this.randomMode || this.customMode) return;
+    const name = this.world.def.name, rec = this.save.ghosts[name];
+    if (typeof rec === 'string') { try { this.bestGhost = new GhostPlayback(rec); } catch { this.bestGhost = null; } }
+    if (this.showSolution && this.solutions?.[name]) this.solution = new SolutionGhost(this.currentDef, this.solutions[name]);
+  }
+
+  async toggleSolution() {
+    if (this.showSolution) { this.showSolution = false; this.solution = null; this.paused = false; return; }
+    if (!this.solutions) {
+      try { this.solutions = await (await fetch('data/solutions.json')).json(); } catch { this.showToast('COULD NOT LOAD THE SOLUTION'); return; }
+    }
+    this.showSolution = true; this.usedSolution = true; this.paused = false;
+    this.showToast('SOLUTION GHOST ON - NO MEDAL FOR THIS RUN');
+    this.go(() => this.loadLevel(false));
   }
 
   completeLevel() {
@@ -367,9 +422,16 @@ export class App {
       cm.verified = true;
       CustomMaps.save(cm);
     } else {
-      const best = s.best[this.level];
+      const best = s.best[this.level], name = this.world.def.name;
       this.newBest = best <= 0 || this.levelTime < best;
-      if (this.newBest) s.best[this.level] = this.levelTime;
+      if (this.newBest) {
+        s.best[this.level] = this.levelTime;
+        const enc = this.usedSolution ? null : this.rec.encode();
+        if (enc) s.ghosts[name] = enc;
+      }
+      const par = this.pars?.[name];
+      this.medal = par && !this.usedSolution ? (this.levelTime <= par ? 3 : this.levelTime <= par * 1.5 ? 2 : 1) : 0;
+      if (this.medal > (s.medals[name] || 0)) s.medals[name] = this.medal;
     }
     s.store();
     this.setScreen('complete');
@@ -411,6 +473,12 @@ export class App {
       : V(this.camPos.x + Math.sin(this.time * 0.35) * 420, this.camPos.y - 60 + Math.cos(this.time * 0.27) * 140);
 
     g.setTarget(this.canvas);
+    const gh = [];
+    if (this.screen === 'play' && shown === this.world) {
+      if (this.solution) gh.push({ p: this.solution.pose, kind: 'sol' });
+      else if (this.save.ghostOn && this.bestGhost && this.levelTime < this.bestGhost.duration + 1.5) { const pose = this.bestGhost.at(this.levelTime); if (pose) gh.push({ p: pose, kind: 'best' }); }
+    }
+    this.renderer.ghosts = gh;
     this.renderer.prepareWindows(shown, this.cam, this.canvas);
     g.clear(PP.Ink);
     this.renderer.drawScene(shown, this.cam, eye);
@@ -543,6 +611,11 @@ export class App {
       const accent = complete ? PP.Exit : locked ? C(70, 76, 86) : PP.BlueRamp[2];
       UI.panel(r, 1, over ? PP.BlueRamp[2] : null);
       g.rect(r.x + 2, r.y + 2, 4, r.h - 4, accent);
+      const medal = s.medals[this.chambers[i].name] || 0;
+      if (!locked && medal > 0) {
+        const mc = [0, C(205, 127, 70), C(205, 213, 226), C(246, 196, 60)][medal];
+        for (let k = 0; k < medal; k++) g.rect(r.x + r.w - 22 - k * 12, r.y + 14, 8, 8, mc);
+      }
       const textCol = locked ? C(90, 98, 110) : PP.CreamHi;
       UI.text(String(i + 1).padStart(2, '0'), V(r.x + 18, r.y + 14), 46, textCol);
       const name = locked ? 'LOCKED' : this.chambers[i].name;
@@ -801,7 +874,7 @@ export class App {
         g.opacity = 1;
       } else if (!this.hintsOn || this.hintT > this.hintEnd) {
         g.opacity = this.hudAlpha('foot', R(20, K.ScreenH - 30, 400, 16));
-        UI.text('H HINTS   R RESTART   ESC PAUSE', V(20, K.ScreenH - 30), 16, withAlpha(DIM, 0.6));
+        UI.text(this.bestGhost ? 'H HINTS   R RESTART   G GHOST   ESC PAUSE' : 'H HINTS   R RESTART   ESC PAUSE', V(20, K.ScreenH - 30), 16, withAlpha(DIM, 0.6));
         g.opacity = 1;
       }
     }
@@ -859,7 +932,8 @@ export class App {
   drawPause() {
     const g = this.g;
     g.rect(0, 0, K.ScreenW, K.ScreenH, C(6, 8, 12, 170));
-    const r = R(K.ScreenW / 2 - 230, K.ScreenH / 2 - 214, 460, 428);
+    const camp = !this.customMode && !this.randomMode, hh = 428 + (camp ? 68 : 0);
+    const r = R(K.ScreenW / 2 - 230, K.ScreenH / 2 - hh / 2, 460, hh);
     UI.panel(r);
     UI.textShadow('PAUSED', V(K.ScreenW / 2, r.y + 50), 46, PP.CreamHi, Align.Center);
     let y = r.y + 100;
@@ -868,6 +942,10 @@ export class App {
     y += 68;
     if (UI.button('p_restart', R(x, y, bw, 56), 'RESTART')) this.go(() => this.loadLevel(false));
     y += 68;
+    if (camp) {
+      if (UI.button('p_sol', R(x, y, bw, 56), this.showSolution ? 'HIDE SOLUTION' : 'WATCH SOLUTION')) this.toggleSolution();
+      y += 68;
+    }
     if (this.customMode) { if (UI.button('p_select', R(x, y, bw, 56), this.fromEditor ? 'BACK TO EDITOR' : 'MY MAPS')) this.exitCustom(); }
     else if (UI.button('p_select', R(x, y, bw, 56), 'CHAMBERS')) this.go(() => this.setScreen('select'));
     y += 68;
@@ -878,7 +956,8 @@ export class App {
     const g = this.g, s = this.save, w = this.world;
     const a = clamp01(this.stateT * 4);
     g.rect(0, 0, K.ScreenW, K.ScreenH, C(6, 8, 12, 160 * a));
-    const r = R(K.ScreenW / 2 - 290, roundEven(K.ScreenH / 2 - 236 + (1 - easeOutCubic(this.stateT * 3)) * 30), 580, 472);
+    const camp = !this.randomMode && !this.customMode, extra = camp ? 50 : 0;
+    const r = R(K.ScreenW / 2 - 290, roundEven(K.ScreenH / 2 - 236 - extra / 2 + (1 - easeOutCubic(this.stateT * 3)) * 30), 580, 472 + extra);
     UI.panel(r, a, PP.Exit);
     const head = this.customMode ? (this.fromEditor ? 'MAP TEST' : 'CUSTOM MAP') + '  ' + w.def.name.toUpperCase()
       : this.randomMode ? `RANDOM TEST  SEED ${this.randomSeed}` : `TEST CHAMBER ${String(this.level + 1).padStart(2, '0')}`;
@@ -902,6 +981,10 @@ export class App {
     if (this.randomMode) row('STREAK', String(this.streak), PP.Exit, this.streak >= s.randomBestStreak && this.streak > 1 ? 'RECORD' : null);
     else if (this.customMode) row('BEST', UI.formatTime(this.customMap.best), PP.Cream);
     else row('BEST', UI.formatTime(s.best[this.level]), PP.Cream);
+    if (camp && this.pars?.[w.def.name]) {
+      const par = this.pars[w.def.name];
+      row('PAR', UI.formatTime(par), this.medal === 3 ? PP.Hazard : PP.Cream, this.usedSolution ? 'ASSISTED' : ['', 'BRONZE', 'SILVER', 'GOLD'][this.medal]);
+    }
     row('PORTALS PLACED', String(w.portalsPlaced), PP.Cream);
     row('DEATHS', String(this.deaths), this.deaths === 0 ? PP.Exit : PP.Cream);
 

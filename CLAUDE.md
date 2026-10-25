@@ -29,6 +29,16 @@ The original C# + Raylib desktop version is frozen in `OLD-DESKTOP/` (see its RE
   42-53 composed from `Procgen` rooms (see OLD-DESKTOP). Best times are saved by chamber **name**, so renaming resets them.
 - If physics changes, change `src/world.js` and re-run the export, then `node tests/replay.mjs`, so the C# solutions still prove every chamber solvable.
 
+## Ghosts, par times and new tiles
+
+- `data/solutions.json` + `data/pars.json` come from the C# reference solutions: after re-exporting levels run `node tools/make-solutions.mjs`
+  (needs `test/traces.json`). Pause menu WATCH SOLUTION replays a solution through its own World (`src/ghost.js`); par = 1.5x the reference run
+  (gold), 1.5x par silver. Best-run ghosts are recorded samples saved in `save.ghosts` by chamber name.
+- Tiles added in the web version only (not in any exported chamber, editor/custom maps only): `S` sentry turret, `B` lift beam (up), `D` push beam (down).
+  Keep new mechanics additive so the C# replays still match.
+- Lighting: `render.js` builds a half-res light map from ray-cast lights (`collectLights`/`applyLighting`), multiplies and doubles it over the
+  scene, then draws emissive things (lasers, portals, goo, fizzlers, holograms, shafts) on top. `PP.Ambient` sets how dark it is.
+
 ## Character customiser
 
 - `src/art.js`: `COLORS`, `HATS` (rects relative to the body's top row), `FACE_NAMES`, `OUTFIT_NAMES`, `buildPlayerSheet(look)`. Frames are 16x20

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.14.0-ff8a1f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-2.15.0-ff8a1f?style=flat-square">
   <img alt="JavaScript" src="https://img.shields.io/badge/plain-JavaScript-3fa7ff?style=flat-square">
   <img alt="platforms" src="https://img.shields.io/badge/play-in%20your%20browser-5ee08a?style=flat-square">
   <img alt="license" src="https://img.shields.io/badge/license-PolyForm%20Strict-d97757?style=flat-square">

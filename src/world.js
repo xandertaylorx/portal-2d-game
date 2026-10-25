@@ -9,7 +9,7 @@ export const Sfx = {
   PortalBlue: 'PortalBlue', PortalOrange: 'PortalOrange', PortalFail: 'PortalFail', Jump: 'Jump', Land: 'Land',
   Teleport: 'Teleport', ButtonDown: 'ButtonDown', ButtonUp: 'ButtonUp', DoorOpen: 'DoorOpen', DoorClose: 'DoorClose',
   Pickup: 'Pickup', Drop: 'Drop', Death: 'Death', Win: 'Win', Fizzle: 'Fizzle', CubeDissolve: 'CubeDissolve',
-  CubeSpawn: 'CubeSpawn', ReceiverOn: 'ReceiverOn',
+  CubeSpawn: 'CubeSpawn', ReceiverOn: 'ReceiverOn', TurretSpot: 'TurretSpot', TurretFire: 'TurretFire',
 };
 
 export const GunMode = { None: 0, BlueOnly: 1, Both: 2 };
@@ -134,6 +134,7 @@ export class World {
     this.cubes = []; this.buttons = []; this.emitters = []; this.receivers = [];
     this.portals = [null, null];
     this.fading = [];   // visual only: replaced portals collapsing away
+    this.turrets = []; this.beams = []; this.shots = [];   // sentries, lift/push beams, and the bolts they just fired
     this.doorOpen = new Array(World.Groups).fill(0);
     this.groupActive = new Array(World.Groups).fill(false);
     this.lasers = []; this.laserImpacts = []; this.events = [];
@@ -160,6 +161,8 @@ export class World {
         else if (c === '<') this.emitters.push({ x, y, dir: V(-1, 0) });
         else if (c === '^') this.emitters.push({ x, y, dir: V(0, -1) });
         else if (c === 'v') this.emitters.push({ x, y, dir: V(0, 1) });
+        else if (c === 'S') this.turrets.push({ x, y, charge: 0, ang: Math.PI / 2, sees: false, spot: 0, fire: 0 });
+        else if (c === 'B' || c === 'D') this.beams.push({ x, y, dir: c === 'B' ? -1 : 1, len: 0, active: false });
         else if (c === 'u') { blueMarker = V(x, y); c = ' '; }
         else if (c === 'o') { orangeMarker = V(x, y); c = ' '; }
         this.tiles[x][y] = c;
@@ -191,7 +194,7 @@ export class World {
   isSolid(x, y) {
     const c = this.at(x, y);
     switch (c) {
-      case '#': case 'X': case '=': case '<': case '>': case '^': case 'v': case 'J': case 'Q': case 'q': case 'G': return true;
+      case '#': case 'X': case '=': case '<': case '>': case '^': case 'v': case 'J': case 'Q': case 'q': case 'G': case 'S': case 'B': case 'D': return true;
       default:
         if (c >= 'a' && c <= 'f') return this.doorOpen[c.charCodeAt(0) - 97] < 0.98;
         return World.isReceiver(c);
@@ -304,7 +307,7 @@ export class World {
 
   // ---------------------------------------------------------------- update
 
-  emit(s, pos, shake = 0) { this.events.push({ sound: s, pos: V(pos.x, pos.y), shake }); }
+  emit(s, pos, shake = 0, freeze = 0, pitch = 1) { this.events.push({ sound: s, pos: V(pos.x, pos.y), shake, freeze, pitch }); }
 
   update(dt, input) {
     this.time += dt;
@@ -316,6 +319,8 @@ export class World {
     }
     if (this.player) this.updatePlayer(this.player, dt, input);
     for (const c of this.cubes) this.updateCube(c, dt);
+    this.updateBeams();
+    this.updateTurrets(dt);
     this.computeLasers();
     this.updateGroups(dt, false);
     this.updateHazards();
@@ -364,13 +369,14 @@ export class World {
       p.vel.x = approach(p.vel.x, 0, (Math.abs(p.vel.x) <= World.MaxWalk * 1.05 ? 1600 : 120) * dt);
     }
     p.vel.y = Math.min(p.vel.y + G * dt, World.MaxFall);
+    this.applyBeams(p, dt, input.moveX === 0);
 
     const wasGround = p.onGround;
     const prevVy = p.vel.y;
     this.moveBody(p, dt, true);
     if (!wasGround && p.onGround && prevVy > 350) {
       p.squash = Math.min(0.35, prevVy / 3000);
-      this.emit(Sfx.Land, V(p.pos.x, p.pos.y + p.half.y), prevVy > 1000 ? 6 : 0);
+      this.emit(Sfx.Land, V(p.pos.x, p.pos.y + p.half.y), prevVy > 1000 ? 6 : 0, prevVy > 1250 ? 0.045 : 0);
       this.fx.burst(V(p.pos.x, p.pos.y + p.half.y), Palette.Dust, 8, 90, 0.4, 3, 200, PKind.Dot, false, V(0, -1), 1.3);
     }
     if (p.onGround && Math.abs(p.vel.x) > 10) p.walkPhase += Math.abs(p.vel.x) * dt * 0.045;
@@ -460,10 +466,11 @@ export class World {
     }
     c.vel.y = Math.min(c.vel.y + World.Gravity * dt, World.MaxFall);
     c.vel.x = approach(c.vel.x, 0, (c.onGround ? 1600 : 50) * dt);
+    this.applyBeams(c, dt, true);
     const wasGround = c.onGround;
     const prevVy = c.vel.y;
     this.moveBody(c, dt, true);
-    if (!wasGround && c.onGround && prevVy > 400) this.emit(Sfx.Land, c.pos, 0);
+    if (!wasGround && c.onGround && prevVy > 400) this.emit(Sfx.Land, c.pos, prevVy > 1100 ? 2 : 0);
   }
 
   // ---------------------------------------------------------------- physics
@@ -608,14 +615,14 @@ export class World {
       this.fx.burst(V(q.center.x + q.normal.x * 6, q.center.y + q.normal.y * 6), mix(colB, Palette.White, 0.5), 8 + Math.trunc(sp / 120), sp * 0.7, 0.35, 2.5, 0, PKind.Spark, true, V(nv.x, nv.y), 0.3);
       if (b instanceof Player) {
         b.jumpCut = true;
-        this.emit(Sfx.Teleport, q.center);
+        this.emit(Sfx.Teleport, q.center, sp > 900 ? 3 : 0, sp > 1150 ? 0.05 : 0, 0.8 + Math.min(sp, 1800) / 1800 * 0.6);
         const held = b.holding;
         if (held) {
           held.pos = V(np.x + q.normal.x * 18, np.y + q.normal.y * 18);
           held.vel = V(nv.x, nv.y);
           held.teleportFlash = 1;
         }
-      } else this.emit(Sfx.Teleport, q.center);
+      } else this.emit(Sfx.Teleport, q.center, 0, 0, 0.8 + Math.min(sp, 1800) / 1800 * 0.6);
       return true;
     }
     return false;
@@ -697,6 +704,71 @@ export class World {
       }
     }
     if (hitPlayer && this.player) this.kill(this.player, Palette.LaserRed);
+  }
+
+  // ---------------------------------------------------------------- sentries and lift beams
+
+  /** How far each beam reaches: up to the first solid tile (doors included, so they can cut a beam off). */
+  updateBeams() {
+    for (const b of this.beams) {
+      let n = 0;
+      while (n < 60 && !this.isSolid(b.x, b.y + b.dir * (n + 1))) n++;
+      b.len = n;
+    }
+  }
+
+  beamRect(b) {
+    const y0 = b.dir < 0 ? (b.y - b.len) * T : (b.y + 1) * T;
+    return { x: b.x * T + 5, y: y0, w: T - 10, h: b.len * T };
+  }
+
+  /** Bodies inside a beam are carried along it (and drift to its centre when not steering). */
+  applyBeams(body, dt, centre) {
+    for (const b of this.beams) {
+      if (b.len <= 0 || !overlaps(body.rect, this.beamRect(b))) continue;
+      body.vel.y = approach(body.vel.y, b.dir * 300, 4400 * dt);
+      if (centre) body.vel.x = approach(body.vel.x, (b.x * T + T / 2 - body.pos.x) * 5, 900 * dt);
+      body.onGround = false;
+      return;
+    }
+  }
+
+  /** Sentries lock on to a visible player, charge, then fire. Walls and cubes break the line of sight. */
+  updateTurrets(dt) {
+    for (let i = this.shots.length - 1; i >= 0; i--) { this.shots[i].life -= dt; if (this.shots[i].life <= 0) this.shots.splice(i, 1); }
+    const p = this.player;
+    for (const t of this.turrets) {
+      t.fire = Math.max(0, t.fire - dt * 5);
+      const cx = t.x * T + T / 2, cy = t.y * T + T / 2;
+      let sees = false, dx = 0, dy = 1, dist = 0;
+      if (p && !p.dead && !p.won) {
+        dx = p.pos.x - cx; dy = p.pos.y - 2 - cy; dist = Math.hypot(dx, dy);
+        if (dist > 20 && dist < 560) {
+          const dir = V(dx / dist, dy / dist);
+          const o = V(cx + dir.x * 17, cy + dir.y * 17);
+          sees = !this.castGrid(o, dir, dist - 17, (x, y) => this.isSolid(x, y)).hit;
+          if (sees) for (const c of this.cubes) if (c.solid) { const tt = rayAabb(o, dir, c.rect); if (tt >= 0 && tt < dist - 17) { sees = false; break; } }
+        }
+      }
+      if (sees) {
+        const want = Math.atan2(dy, dx);
+        let d = want - t.ang;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        t.ang += d * Math.min(1, dt * 14);
+        if (!t.sees) { t.spot = 1; this.emit(Sfx.TurretSpot, V(cx, cy)); }
+        t.charge += dt / 0.85;
+        if (t.charge >= 1) {
+          t.charge = -0.5;     // reload pause after a shot
+          t.fire = 1;
+          this.shots.push({ a: V(cx, cy), b: V(p.pos.x, p.pos.y - 2), life: 0.22 });
+          this.emit(Sfx.TurretFire, V(cx, cy), 4);
+          this.kill(p, Palette.LaserRed);
+        }
+      } else t.charge = t.charge < 0 ? Math.min(0, t.charge + dt) : Math.max(0, t.charge - dt * 1.6);
+      t.spot = Math.max(0, t.spot - dt * 4);
+      t.sees = sees;
+    }
   }
 
   updateGroups(dt, initial) {

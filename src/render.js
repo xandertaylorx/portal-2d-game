@@ -38,6 +38,7 @@ export class Renderer {
     this.lightSmall = makeCanvas(K.CanvasW / 4, K.CanvasH / 4);    // quarter-res copy: the smooth upscale blurs every shadow and glow edge
     this.lights = [];
     this.occluders = [];
+    this.ghosts = [];   // {p, kind}: translucent players drawn for the best-run and solution ghosts
   }
 
   artFor(w) {
@@ -127,22 +128,27 @@ export class Renderer {
     for (const b of w.buttons) this.drawButton(b);
     for (const c of w.cubes) this.drawWithClones(w, c, () => this.drawCube(c));
     if (w.player) this.drawWithClones(w, w.player, () => this.drawPlayer(w.player));
+    for (const gh of this.ghosts) this.drawGhost(gh);
     this.drawLayer(a.frontTex, w, view);
 
     // the scene so far is unlit: shade it by the light map, then draw everything that emits light on top
     this.applyLighting(w, view, x0, y0, x1, y1);
     this.drawLampFixtures(w, view);
+    this.drawShafts(w, view);
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const c = w.tiles[x][y];
       if (c === '~') this.drawGoo(w, x, y);
       else if (c === '|') this.drawFizzler(w, x, y);
       else if (World.isDoor(c)) this.drawDoorLamp(w, x, y, c.charCodeAt(0) - 97);
+      else if (c === '=') this.drawGlassSheen(x, y);
     }
     for (const c of w.cubes) {
       const glow = Math.max(c.held ? 1 : 0, c.onButtonGlow, c.teleportFlash);
       if (!c.gone && !c.dissolving && glow > 0.05) this.drawWithClones(w, c, () => this.drawHolo(snapV(c.pos), glow, c.held ? PP.BlueRamp[2] : PP.OrangeRamp[2]));
     }
     if (w.hasExit) this.drawExitSign(w);
+    for (const b of w.beams) this.drawBeam(w, b);
+    for (const t of w.turrets) this.drawTurret(w, t);
     for (const r of w.receivers) this.drawReceiverGlow(r);
     for (const e of w.emitters) this.drawEmitterGlow(e);
     this.drawLasers(w);
@@ -185,6 +191,123 @@ export class Renderer {
       g.circleGrad(lx, ly + 8, 22, C(255, 244, 220, 170), C(255, 230, 190, 0));
       g.additive = false;
     }
+  }
+
+  /** Volumetric light shafts under each lamp (cut off where they hit the floor) with dust drifting through them. */
+  drawShafts(w, view) {
+    const g = this.gfx, t = this.time;
+    g.additive = true;
+    for (const [x, y] of this.lampList(w)) {
+      const lx = x * T + T / 2, ly = y * T + 9;
+      if (lx < view.x - 300 || lx > view.x + view.w + 300 || ly < view.y - 320 || ly > view.y + view.h + 40) continue;
+      const flick = 0.92 + 0.08 * Math.sin(t * 1.3 + lx);
+      for (const [half, near] of [[0.46, 12], [0.22, 20]]) {
+        const pts = [V(lx - 7, ly)];
+        for (let i = 0; i <= 8; i++) {
+          const ang = Math.PI / 2 + (i / 4 - 1) * half, dx = Math.cos(ang), dy = Math.sin(ang);
+          const d = Math.min(300, this.rayDist(w, lx, ly, dx, dy, 300));
+          pts.push(V(lx + dx * d, ly + dy * d));
+        }
+        pts.push(V(lx + 7, ly));
+        g.quadGradV(pts, ly, ly + 300, C(255, 240, 210, near * flick), C(255, 240, 210, 0));
+      }
+      // dust motes: each drifts slowly down its own line through the beam
+      for (let k = 0; k < 14; k++) {
+        const hs = hash(x * 7 + k, y, 31), hs2 = hash(k, x + y, 17);
+        const v = (hs + t * (0.012 + hs2 * 0.02)) % 1, u = (hs2 * 2 - 1) * 0.42 + Math.sin(t * 0.4 + k * 1.7) * 0.03;
+        const ang = Math.PI / 2 + u, dx = Math.cos(ang), dy = Math.sin(ang), d = 28 + v * 260;
+        if (d > this.rayDist(w, lx, ly, dx, dy, 300) - 6) continue;
+        const tw = 0.5 + 0.5 * Math.sin(t * (1.5 + hs2 * 2) + k * 2.3);
+        const px = Math.trunc(snap(lx + dx * d)), py = Math.trunc(snap(ly + dy * d));
+        g.rect(px, py, 2, 2, C(255, 244, 220, 255 * (0.18 + 0.5 * tw) * (1 - v * 0.6) * flick));
+      }
+    }
+    g.additive = false;
+  }
+
+  /** A lift (blue, up) or push (orange, down) beam: a glowing column with chevrons streaming along it. */
+  drawBeam(w, b) {
+    if (b.len <= 0) return;
+    const g = this.gfx, t = this.time, up = b.dir < 0;
+    const col = up ? PP.BlueRamp[2] : PP.OrangeRamp[2], hot = up ? PP.BlueRamp[3] : PP.OrangeRamp[3];
+    const r = w.beamRect(b), cx = b.x * T + T / 2;
+    g.additive = true;
+    g.glowBand(r.x - 10, r.y, r.w + 20, r.h, true, withAlpha(col, 0.5));
+    g.rect(r.x, r.y, r.w, r.h, withAlpha(col, 0.1));
+    g.rect(r.x, r.y, 2, r.h, withAlpha(hot, 0.55)); g.rect(r.x + r.w - 2, r.y, 2, r.h, withAlpha(hot, 0.55));
+    const spacing = 40, shift = (t * 90) % spacing;
+    for (let d = -spacing; d < r.h + spacing; d += spacing) {
+      const yy = b.dir < 0 ? r.y + r.h - d - shift : r.y + d + shift;
+      if (yy < r.y || yy > r.y + r.h - 6) continue;
+      const edge = Math.min(yy - r.y, r.y + r.h - yy), a = clamp01(edge / 24);
+      const c = withAlpha(hot, 0.85 * a);
+      for (let i = 0; i < 5; i++) {
+        const o = i * 2, dy = up ? 8 - o : o;
+        g.rect(Math.trunc(snap(cx)) - 10 + o, Math.trunc(snap(yy)) + dy, 2, 2, c);
+        g.rect(Math.trunc(snap(cx)) + 8 - o, Math.trunc(snap(yy)) + dy, 2, 2, c);
+      }
+    }
+    g.circleGrad(cx, b.dir < 0 ? r.y + r.h : r.y, 36, withAlpha(col, 0.55), withAlpha(col, 0));
+    g.additive = false;
+  }
+
+  /** A sentry's eye: it swings toward you, a red sight line grows as it charges, and a bolt flashes when it fires. */
+  drawTurret(w, tr) {
+    const g = this.gfx, t = this.time;
+    const cx = tr.x * T + T / 2, cy = tr.y * T + T / 2;
+    const idle = Math.sin(t * 0.8 + tr.x) * 0.6;
+    const look = tr.sees ? tr.ang : Math.PI / 2 + idle;
+    const charge = clamp01(tr.charge);
+    const ex = Math.trunc(snap(cx + Math.cos(look) * 5)), ey = Math.trunc(snap(cy + Math.sin(look) * 5));
+    const hot = mix(C(255, 90, 60), C(255, 240, 220), charge);
+    g.rect(ex - 4, ey - 4, 8, 8, C(60, 18, 14));
+    g.rect(ex - 2, ey - 2, 4, 4, withAlpha(hot, 0.45 + 0.55 * (tr.sees ? 1 : 0.35)));
+    g.additive = true;
+    g.circleGrad(cx, cy, 30 + charge * 22 + tr.fire * 30, withAlpha(hot, 0.28 + 0.45 * charge + 0.4 * tr.fire), withAlpha(hot, 0));
+    if (tr.sees && w.player) {
+      // sight line: thin and dim while locking on, bright and thick right before the shot
+      const p = w.player, dx = p.pos.x - cx, dy = p.pos.y - 2 - cy, len = Math.hypot(dx, dy) || 1;
+      const a = 0.1 + 0.8 * charge * charge;
+      for (let d = 18; d < len; d += 4) g.rect(Math.trunc(snap(cx + dx / len * d)), Math.trunc(snap(cy + dy / len * d)), 2, 2, withAlpha(C(255, 70, 50), a * (Math.trunc(d / 4) % 2 ? 0.6 : 1)));
+    }
+    for (const s of w.shots) if (Math.abs(s.a.x - cx) < 1 && Math.abs(s.a.y - cy) < 1) {
+      const a = clamp01(s.life / 0.22);
+      g.line(s.a, s.b, 6 * a + 2, withAlpha(C(255, 70, 50), 0.55 * a));
+      g.line(s.a, s.b, 2, withAlpha(C(255, 245, 235), a));
+    }
+    g.additive = false;
+  }
+
+  /** A slow diagonal glint sliding across glass panes. */
+  drawGlassSheen(tx, ty) {
+    const g = this.gfx, ox = tx * T, oy = ty * T, t = this.time;
+    g.additive = true;
+    const ph = ((t * 0.28 + (tx + ty) * 0.17) % 2.2) - 0.5;
+    for (let j = 0; j < 16; j++) {
+      const sx = Math.trunc((ph * (T + 24) - 24 + j * 3) / 2) * 2;
+      const x0 = clamp(sx, 0, T), x1 = clamp(sx + 6, 0, T);
+      if (x1 > x0) g.rect(ox + x0, oy + j * 2, x1 - x0, 2, C(210, 235, 255, 46));
+    }
+    g.rect(ox, oy, T, 2, C(200, 230, 255, 26));
+    g.additive = false;
+  }
+
+  /** Light pooled on a floor reads as a squashed glossy reflection hugging the surface under each light. */
+  drawReflections(w) {
+    const g = this.gfx;
+    g.additive = true;
+    for (const l of this.lights) {
+      const a = l.col.a / 255;
+      if (l.r < 100 || a < 0.07) continue;
+      const d = this.rayDist(w, l.x, l.y, 0, 1, 340);
+      if (d >= 340) continue;
+      const s = a * 0.75 * Math.pow(1 - d / 340, 1.2), fy = l.y + d;
+      g.push();
+      g.mult([1, 0, 0, 0.14, 0, fy * (1 - 0.14)]);
+      g.circleGrad(l.x, fy, Math.min(l.r * 0.6, 170), withAlpha(l.col, Math.min(0.5, s)), withAlpha(l.col, 0));
+      g.pop();
+    }
+    g.additive = false;
   }
 
   // ================================================================ dynamic tiles
@@ -396,6 +519,18 @@ export class Renderer {
     g.additive = false;
   }
 
+  drawGhost(gh) {
+    const p = gh.p, g = this.gfx;
+    if (!p || p.dead) return;
+    const col = gh.kind === 'sol' ? PP.OrangeRamp[2] : PP.BlueRamp[2];
+    g.opacity = 0.42;
+    this.drawPlayer(p);
+    g.opacity = 1;
+    g.additive = true;
+    g.circleGrad(p.pos.x, p.pos.y, 30, withAlpha(col, 0.22), withAlpha(col, 0));
+    g.additive = false;
+  }
+
   drawPlayer(p) {
     if (p.dead) return;
     const g = this.gfx;
@@ -580,6 +715,17 @@ export class Renderer {
         this.castLight(w, s.a.x + (s.b.x - s.a.x) * f, s.a.y + (s.b.y - s.a.y) * f, 96, C(255, 40, 30, 62), view);
       }
     }
+    for (const tr of w.turrets) {
+      const charge = clamp01(tr.charge), cx = tr.x * T + 16, cy = tr.y * T + 16;
+      const dir = tr.sees ? tr.ang : Math.PI / 2;
+      this.castLight(w, cx + Math.cos(dir) * 20, cy + Math.sin(dir) * 20, 110 + charge * 90 + tr.fire * 120, C(255, 60, 40, 80 + 120 * charge + 90 * tr.fire), view);
+    }
+    for (const b of w.beams) {
+      if (b.len <= 0) continue;
+      const col = b.dir < 0 ? PP.BlueRamp[2] : PP.OrangeRamp[2], r = w.beamRect(b);
+      const n = clamp(Math.floor(b.len / 2), 1, 6);
+      for (let k = 0; k < n; k++) this.castLight(w, b.x * T + 16, r.y + r.h * (k + 0.5) / n, 100, withAlpha(col, 0.34), view);
+    }
     for (const imp of w.laserImpacts) this.castLightNear(w, imp.x, imp.y, 130, C(255, 90, 50, 215), view, 6);
     for (const e of w.emitters) this.castLight(w, e.x * T + 16 + e.dir.x * 20, e.y * T + 16 + e.dir.y * 20, 120, C(255, 50, 40, 150), view);
     for (const r of w.receivers) if (r.glow > 0.02) this.castLightNear(w, r.x * T + 16, r.y * T + 16, 150, C(255, 170, 90, 210 * r.glow), view, 20);
@@ -649,6 +795,7 @@ export class Renderer {
     mctx.globalAlpha = 1;
     mctx.globalCompositeOperation = 'source-over';
     mctx.imageSmoothingEnabled = false;
+    this.drawReflections(w);
   }
 
   drawParticles(w) {

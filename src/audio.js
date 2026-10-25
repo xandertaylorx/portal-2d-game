@@ -24,13 +24,18 @@ export class Audio {
     try {
       this.ctx = new AC();
       this.out = this.ctx.createGain();
-      this.out.connect(this.ctx.destination);
+      // everything passes through a low-pass that closes briefly after a portal trip (the muffled-to-clear swell)
+      this.filter = this.ctx.createBiquadFilter();
+      this.filter.type = 'lowpass'; this.filter.frequency.value = 20000; this.filter.Q.value = 0.4;
+      this.out.connect(this.filter);
+      this.filter.connect(this.ctx.destination);
       this.ambGain = this.ctx.createGain();
       this.ambGain.connect(this.out);
       this.build();
       this.ready = true;
       this.applyVolumes();
       this.startAmbience();
+      this.startLoops();
     } catch (e) {
       this.ready = false;
     }
@@ -49,6 +54,43 @@ export class Audio {
     src.connect(this.ambGain);
     src.start();
     this.ambientSource = src;
+  }
+
+  /** Continuous layers whose volume follows the scene: beam hum, portal hum, and wind rush that rises with speed. */
+  startLoops() {
+    const mk = (name, rate = 1) => {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.buffers.get(name);
+      src.loop = true;
+      src.playbackRate.value = rate;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(gain); gain.connect(this.out);
+      src.start();
+      return { src, gain };
+    };
+    this.loops = { laser: mk('laserHum'), portal: mk('portalHum'), wind: mk('wind') };
+  }
+
+  /** laser / portal / speed are 0..1: how close the nearest beam and portal are, and how fast the player is moving. */
+  setScene(sc) {
+    if (!this.ready || !this.loops) return;
+    const t = this.ctx.currentTime;
+    const L = this.loops;
+    L.laser.gain.gain.setTargetAtTime(sc.laser * 0.11 * this.sfxVolume, t, 0.08);
+    L.portal.gain.gain.setTargetAtTime(sc.portal * 0.13 * this.sfxVolume, t, 0.1);
+    L.wind.gain.gain.setTargetAtTime(sc.speed * 0.16 * this.sfxVolume, t, 0.12);
+    L.wind.src.playbackRate.setTargetAtTime(0.75 + sc.speed * 0.7, t, 0.1);
+    L.portal.src.playbackRate.setTargetAtTime(0.92 + sc.portal * 0.1 + sc.speed * 0.15, t, 0.15);
+  }
+
+  /** Dull the whole mix, then let it open back up. */
+  muffle(depth = 1) {
+    if (!this.ready) return;
+    const f = this.filter.frequency, t = this.ctx.currentTime;
+    f.cancelScheduledValues(t);
+    f.setValueAtTime(Math.max(500, 4200 - depth * 3600), t);
+    f.exponentialRampToValueAtTime(20000, t + 0.25 + depth * 0.45);
   }
 
   build() {
@@ -73,7 +115,12 @@ export class Audio {
     add(Sfx.ReceiverOn, this.gen(0.5, (t) => (this.sine(sweep(180, 260, t, 0.5)) + this.sine(sweep(360, 520, t, 0.5)) * 0.5) * env(t, 0.03, 0.5) * 0.3));
     add('hover', this.gen(0.05, (t) => this.sine(1100) * env(t, 0.002, 0.05) * 0.12));
     add('click', this.gen(0.1, (t) => this.sine(sweep(700, 1200, t, 0.1)) * env(t, 0.002, 0.1) * 0.25));
+    add(Sfx.TurretSpot, this.gen(0.18, (t) => this.square(t < 0.07 ? 880 : 1320) * env(t, 0.003, 0.18) * 0.22));
+    add(Sfx.TurretFire, this.gen(0.35, (t) => (this.saw(sweep(1400, 120, t, 0.3)) * 0.5 + this.noise() * 0.35 * Math.max(0, 1 - t * 6)) * env(t, 0.002, 0.35)));
     add('ambient', this.ambience());
+    add('laserHum', this.gen(1, (t) => (this.saw(100) * 0.5 + this.saw(200) * 0.25 + this.sine(300) * 0.25) * (0.8 + 0.2 * Math.sin(TAU * 4 * t)) * 0.5));
+    add('portalHum', this.gen(1, (t) => (this.sine(220) * 0.5 + this.sine(330) * 0.3 + this.sine(440) * 0.12) * (0.75 + 0.25 * Math.sin(TAU * 2 * t)) * 0.6));
+    add('wind', this.windLoop());
   }
 
   makeBuffer(data) {
@@ -84,13 +131,13 @@ export class Audio {
   }
 
   /** Play one effect; pos/listener give distance attenuation and a little stereo pan. */
-  play(sfx, pos, listener) {
+  play(sfx, pos, listener, pitch = 1) {
     if (!this.ready) return;
     const buf = this.buffers.get(sfx);
     if (!buf) return;
     const dist = Math.hypot(pos.x - listener.x, pos.y - listener.y);
     const vol = clamp(1.15 - dist / 1300, 0.35, 1) * this.sfxVolume;
-    this.blip(buf, vol, 1 + (Math.random() - 0.5) * 0.08, clamp((pos.x - listener.x) / 2400, -0.35, 0.35));
+    this.blip(buf, vol, pitch * (1 + (Math.random() - 0.5) * 0.08), clamp((pos.x - listener.x) / 2400, -0.35, 0.35));
   }
 
   blip(buf, vol, rate = 1, pan = 0) {
@@ -205,6 +252,14 @@ export class Audio {
     return d;
   }
 
+  windLoop() {
+    const n = 2 * SR, d = new Float32Array(n);
+    let a = 0, b = 0;
+    for (let i = 0; i < n; i++) { a += (this.noise() - a) * 0.12; b += (a - b) * 0.12; d[i] = (a - b) * 3.2; }
+    const x = 2000;   // fade the seam so the loop does not tick
+    for (let i = 0; i < x; i++) { const k = i / x; d[i] = d[i] * k + d[n - x + i] * (1 - k) * (1 - k); }
+    return d;
+  }
   ambience() {
     const dur = 6, n = Math.floor(dur * SR), d = new Float32Array(n);
     let lp = 0;
