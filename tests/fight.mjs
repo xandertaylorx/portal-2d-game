@@ -1,9 +1,9 @@
 // Fight mode smoke test: arenas generate to size with a start tile, and a simulated match runs to the end without errors.
 // Run: node tests/fight.mjs
-import { Fight, generateArena } from '../src/fight.js';
+import { Fight, generateArena, ARENA_W, ARENA_H } from '../src/fight.js';
 import { emptyInput } from '../src/world.js';
 // arenas generate sanely
-for (let s = 1; s <= 200; s++) { const a = generateArena(s * 7919); if (a.def.map.length !== 22 || a.def.map.some(r => r.length !== 40)) throw new Error('bad arena size'); if (!a.def.map.join('').includes('P')) throw new Error('no P'); }
+for (let s = 1; s <= 200; s++) { const a = generateArena(s * 7919); if (a.def.map.length !== ARENA_H || a.def.map.some(r => r.length !== ARENA_W)) throw new Error('bad arena size'); if (!a.def.map.join('').includes('P')) throw new Error('no P'); }
 console.log('200 arenas ok');
 const save = { store() {}, fightBest: 0, fightWins: 0 };
 let events = 0;

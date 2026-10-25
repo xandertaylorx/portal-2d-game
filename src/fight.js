@@ -5,10 +5,11 @@
 import { K, C, V, withAlpha, mix, clamp, clamp01, Portal, PortalColor, HALF_LEN, overlaps, lerp } from './core.js';
 import { World, Player, makeDef, emptyInput, Sfx, PKind } from './world.js';
 import { PP } from './art.js';
+import { PixelFont } from './gfx.js';
 
 const T = K.Tile;
-export const ARENA_W = 40, ARENA_H = 22;
-const FLOOR = 20;                                  // row of the floor surface
+export const ARENA_W = 32, ARENA_H = 18;           // a compact room: everyone is always in sight
+const FLOOR = 16;                                  // row of the floor surface
 const BOLT_SPEED = 780, BOLT_DMG = 18, BOLT_COST = 22, BOLT_CD = 0.28;
 const MODIFIERS = [
   { id: 'none', name: '' },
@@ -28,60 +29,55 @@ function mulberry(seed) {
 /** A random arena: floor, stepped platforms you can jump between, and a few hazards and toys. */
 export function generateArena(seed) {
   const r = mulberry(seed), ri = (a, b) => a + Math.floor(r() * (b - a + 1)), pick = (arr) => arr[Math.floor(r() * arr.length)];
-  const g = Array.from({ length: ARENA_H }, (_, y) => Array.from({ length: ARENA_W }, (_, x) => (y === 0 || y >= FLOOR || x === 0 || x === ARENA_W - 1 ? 'X' : ' ')));
-  const set = (x, y, c) => { if (x > 0 && x < ARENA_W - 1 && y > 0 && y < ARENA_H - 1) g[y][x] = c; };
+  const W = ARENA_W, H = ARENA_H;
+  const g = Array.from({ length: H }, (_, y) => Array.from({ length: W }, (_, x) => (y === 0 || y >= FLOOR || x === 0 || x === W - 1 ? 'X' : ' ')));
+  const set = (x, y, c) => { if (x > 0 && x < W - 1 && y > 0 && y < H - 1) g[y][x] = c; };
   const fill = (x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, c); };
-  // portal-friendly panels on walls and ceiling
-  for (let i = 0, n = ri(3, 5); i < n; i++) { const x = ri(3, ARENA_W - 9), w = ri(4, 8); for (let k = 0; k < w; k++) if (x + k < ARENA_W - 1) g[0][x + k] = '#'; }
-  for (const x of [0, ARENA_W - 1]) for (let i = 0, n = ri(1, 3); i < n; i++) { const y = ri(3, 15), h = ri(3, 5); for (let k = 0; k < h; k++) g[y + k][x] = '#'; }
-  for (let x = 1; x < ARENA_W - 1; x++) if (r() < 0.55) g[FLOOR][x] = '#';
+  // portal-friendly panels on walls, ceiling and floor
+  for (let i = 0, n = ri(2, 4); i < n; i++) { const x = ri(3, W - 9), w = ri(4, 7); for (let k = 0; k < w; k++) if (x + k < W - 1) g[0][x + k] = '#'; }
+  for (const x of [0, W - 1]) for (let i = 0, n = ri(1, 2); i < n; i++) { const y = ri(3, 10), h = ri(3, 5); for (let k = 0; k < h; k++) g[y + k][x] = '#'; }
+  for (let x = 1; x < W - 1; x++) if (r() < 0.55) g[FLOOR][x] = '#';
 
   // platforms, tier by tier, each one reachable from the one below
-  const tiers = [17, 14, 11, 8, 5], plats = [{ x: 1, w: ARENA_W - 2, y: FLOOR }], tops = [];
+  const tiers = [13, 10, 7, 4], plats = [{ x: 1, w: W - 2, y: FLOOR }], tops = [];
   let below = [plats[0]];
   for (let t = 0; t < tiers.length; t++) {
     const cur = [];
-    for (let i = 0, n = t === 0 ? ri(2, 3) : ri(1, 3); i < n; i++) {
-      const w = ri(4, 8), parent = pick(below);
-      const lo = Math.max(2, parent.x - w - 1), hi = Math.min(ARENA_W - 2 - w, parent.x + parent.w + 1);
+    for (let i = 0, n = ri(1, 3); i < n; i++) {
+      const w = ri(3, 7), parent = pick(below);
+      const lo = Math.max(2, parent.x - w - 1), hi = Math.min(W - 2 - w, parent.x + parent.w + 1);
       if (hi < lo) continue;
       const x = ri(lo, hi);
       if (cur.some((q) => x < q.x + q.w + 2 && x + w + 2 > q.x)) continue;
-      const mat = r() < 0.75 ? '#' : 'X';
-      fill(x, tiers[t], x + w - 1, tiers[t], mat);
+      fill(x, tiers[t], x + w - 1, tiers[t], r() < 0.75 ? '#' : 'X');
       const p = { x, w, y: tiers[t] };
       cur.push(p); plats.push(p);
       for (let k = 1; k < w - 1; k += 2) tops.push({ x: x + k, y: tiers[t] });
     }
     if (cur.length) below = cur;
   }
-  for (let x = 6; x < ARENA_W - 6; x += 3) tops.push({ x, y: FLOOR });
+  for (let x = 6; x < W - 6; x += 3) tops.push({ x, y: FLOOR });
 
   const features = [];
-  // goo pit in the middle of the floor, with a bridge of panels
-  if (r() < 0.55) { const w = ri(4, 7), x = ri(13, ARENA_W - 13 - w); fill(x, FLOOR, x + w - 1, FLOOR + 1, '~'); features.push('goo'); }
-  // gel pads and launch plates
-  if (r() < 0.6) { const x = ri(10, ARENA_W - 14); if (g[FLOOR][x] !== '~' && g[FLOOR][x + 2] !== '~') { fill(x, FLOOR, x + 2, FLOOR, 'J'); features.push('gel'); } }
-  if (r() < 0.35) { const x = ri(10, ARENA_W - 11); if (g[FLOOR][x] !== '~' && g[FLOOR][x] !== 'J') { set(x, FLOOR, r() < 0.5 ? 'Q' : 'q'); features.push('plate'); } }
-  // a lift beam from the floor
-  if (r() < 0.55) { const x = ri(10, ARENA_W - 11); if (g[FLOOR][x] !== '~' && g[FLOOR][x] !== 'J' && !'Qq'.includes(g[FLOOR][x])) { set(x, FLOOR, 'B'); features.push('lift'); } }
-  // sentries on the walls or ceiling
-  // (ceiling only, away from the spawn corners, so nobody is shot the moment the round starts)
-  for (let i = 0, n = r() < 0.65 ? ri(1, 2) : 0; i < n; i++) { set(ri(13, ARENA_W - 14), 1, 'S'); features.push('turret'); }
-  // a laser across the arena
-  if (r() < 0.3) { const y = pick([9, 12, 15]); if (g[y][1] === ' ') { set(1, y, '>'); features.push('laser'); } }
-  // cubes (and sometimes a mirror cube)
-  for (let i = 0, n = ri(2, 3); i < n; i++) { const t = pick(tops.filter((q) => q.x > 6 && q.x < ARENA_W - 7)); if (t && g[t.y - 1][t.x] === ' ') set(t.x, t.y - 1, i === 0 && r() < 0.4 ? pick(['M', 'N']) : 'C'); }
+  if (r() < 0.55) { const w = ri(3, 5), x = ri(10, W - 10 - w); fill(x, FLOOR, x + w - 1, FLOOR + 1, '~'); features.push('goo'); }
+  if (r() < 0.6) { const x = ri(8, W - 11); if (g[FLOOR][x] !== '~' && g[FLOOR][x + 2] !== '~') { fill(x, FLOOR, x + 2, FLOOR, 'J'); features.push('gel'); } }
+  if (r() < 0.35) { const x = ri(8, W - 9); if (g[FLOOR][x] !== '~' && g[FLOOR][x] !== 'J') { set(x, FLOOR, r() < 0.5 ? 'Q' : 'q'); features.push('plate'); } }
+  if (r() < 0.55) { const x = ri(8, W - 9); if (g[FLOOR][x] !== '~' && g[FLOOR][x] !== 'J' && !'Qq'.includes(g[FLOOR][x])) { set(x, FLOOR, 'B'); features.push('lift'); } }
+  // sentries on the ceiling, away from the spawn corners so nobody is shot the moment a round starts
+  for (let i = 0, n = r() < 0.65 ? ri(1, 2) : 0; i < n; i++) { set(ri(10, W - 11), 1, 'S'); features.push('turret'); }
+  if (r() < 0.3) { const y = pick([7, 10, 13]); if (g[y][1] === ' ') { set(1, y, '>'); features.push('laser'); } }
+  for (let i = 0, n = ri(2, 3); i < n; i++) { const t = pick(tops.filter((q) => q.x > 5 && q.x < W - 6)); if (t && g[t.y - 1][t.x] === ' ') set(t.x, t.y - 1, i === 0 && r() < 0.4 ? pick(['M', 'N']) : 'C'); }
 
   // spawn points: solid ground on both sides, never in goo
-  for (const x of [2, 3, 4, 35, 36, 37]) { g[FLOOR][x] = 'X'; g[FLOOR + 1][x] = 'X'; }
-  for (let y = FLOOR - 3; y < FLOOR; y++) for (const x of [2, 3, 4, 35, 36, 37]) if (g[y][x] !== ' ') g[y][x] = ' ';
+  const sp = [2, 3, 4, W - 5, W - 4, W - 3];
+  for (const x of sp) { g[FLOOR][x] = 'X'; g[FLOOR + 1][x] = 'X'; }
+  for (let y = FLOOR - 3; y < FLOOR; y++) for (const x of sp) if (g[y][x] !== ' ') g[y][x] = ' ';
   g[FLOOR - 1][3] = 'P';
   const rows = g.map((row) => row.join(''));
-  const spawns = { player: V(3 * T + 16, FLOOR * T - 15), enemy: V(36 * T + 16, FLOOR * T - 15) };
   return {
     def: makeDef({ name: 'ARENA', map: rows, gun: 2, blue: [1, 0], orange: [1, 0], hints: [], theme: 1 + Math.floor(r() * 6), seed }),
-    spawns, tops: tops.filter((q) => g[q.y][q.x] !== '~'), features,
+    spawns: { player: V(3 * T + 16, FLOOR * T - 15), enemy: V((W - 4) * T + 16, FLOOR * T - 15) },
+    tops: tops.filter((q) => g[q.y][q.x] !== '~'), features, plats,
   };
 }
 
@@ -121,8 +117,8 @@ export class Fight {
     const eMax = Math.round(startHp * (1 + this.level * 0.12));
     this.evil = { body: e, hp: eMax, max: eMax, energy: 100, shield: 0, rapid: 0, cd: 0, flash: 0, stompCd: 0, cubeCd: 0, isYou: false };
     this.fighters = [this.you, this.evil];
-    this.bolts = []; this.pickups = []; this.pickupT = 5 + Math.random() * 3;
-    this.ai = { strafe: 1, strafeT: 0, jumpCd: 0, fireCd: 0.8, tacticT: 6 + Math.random() * 5, tactic: null, dodgeCd: 0, stuckT: 0, lastX: e.pos.x };
+    this.bolts = []; this.pickups = []; this.floaters = []; this.pickupT = 5 + Math.random() * 3;
+    this.ai = { strafe: 1, strafeT: 0, jumpCd: 0, fireCd: 1.6 - this.skill, tacticT: 6 + Math.random() * 5, tactic: null, dodgeCd: 0, stuckT: 0, lastX: e.pos.x };
     this.freeze = 0;
     this.pend = { jump: false, use: false, blue: false, orange: false, cycle: false };
     this.acc = 0; this.time = 0; this.hitFlash = 0; this.slow = 1;
@@ -160,6 +156,7 @@ export class Fight {
       return;
     }
     f.hp -= dmg; f.flash = 1;
+    this.floaters.push({ x: body.pos.x, y: body.pos.y - 26, t: 0, text: String(Math.round(dmg)), col: dmg >= 25 ? C(255, 220, 90) : C(255, 255, 255) });
     if (from) {
       const dx = body.pos.x - from.x, dy = body.pos.y - from.y, d = Math.hypot(dx, dy) || 1;
       body.vel.x += dx / d * 260; body.vel.y = Math.min(body.vel.y, -150) + dy / d * 60;
@@ -315,6 +312,55 @@ export class Fight {
 
   // ---------------------------------------------------------------- the evil twin's brain
 
+  /** Is there goo (rather than ground) just ahead of the body when walking in direction dir? */
+  gooAhead(e, dir) {
+    const w = this.world, col = Math.floor((e.pos.x + dir * 30) / T), feet = Math.floor((e.pos.y + e.half.y + 2) / T);
+    if (w.beams.some((b) => b.len > 0 && b.x === col && b.y >= feet - 1)) return true;     // keep out of lift and push beams
+    for (let y = feet; y < feet + 7; y++) { const c = w.at(col, y); if (c === '~') return true; if (w.isSolid(col, y)) return false; }
+    return false;
+  }
+
+  platformOf(b) {
+    const feet = b.pos.y + b.half.y;
+    let best = null;
+    for (const q of this.arena.plats) {
+      const top = q.y * T;
+      if (top < feet - 8 || b.pos.x < q.x * T - 10 || b.pos.x > (q.x + q.w) * T + 10) continue;
+      if (!best || top < best.y * T) best = q;
+    }
+    return best;
+  }
+
+  /** One step of a route over the platforms toward the player: where to walk and whether to jump now. */
+  navigate(e, p) {
+    const A = this.platformOf(e), B = this.platformOf(p);
+    if (!A || !B || A === B) return null;
+    const plats = this.arena.plats, gap = (a, b) => Math.max(0, a.x - (b.x + b.w), b.x - (a.x + a.w));
+    const ok = (a, b) => (b.y < a.y ? a.y - b.y <= 3 && gap(a, b) <= 3 : gap(a, b) <= 4);
+    const prev = new Map([[A, null]]), queue = [A];
+    while (queue.length) {
+      const a = queue.shift();
+      if (a === B) break;
+      for (const b of plats) if (!prev.has(b) && ok(a, b)) { prev.set(b, a); queue.push(b); }
+    }
+    if (!prev.has(B)) return null;
+    let n = B;
+    while (prev.get(n) !== A) { n = prev.get(n); if (!n) return null; }
+    const cx = (q) => (q.x + q.w / 2) * T;
+    if (n.y < A.y) {
+      // climbing: line up beside the nearer end of the platform above, then jump toward it
+      const l = n.x * T, r = (n.x + n.w) * T;
+      // a full-height jump clears a platform three tiles up only if you take off about 95 units out from its edge
+      const tx = e.pos.x < l ? l - 95 : e.pos.x > r ? r + 95 : (e.pos.x - l < r - e.pos.x ? l - 95 : r + 95);
+      const near = Math.abs(e.pos.x - tx) < 12;
+      return { move: e.onGround ? (near ? Math.sign(cx(n) - e.pos.x) : Math.sign(tx - e.pos.x)) : Math.sign(cx(n) - e.pos.x), jump: near && e.onGround };
+    }
+    // dropping or crossing: walk off the nearest end toward it
+    const l = A.x * T, r = (A.x + A.w) * T, dir = Math.sign(cx(n) - e.pos.x) || 1;
+    const edge = dir > 0 ? r : l;
+    return { move: dir, jump: Math.abs(e.pos.x - edge) < 20 && n.y <= A.y && gap(A, n) > 0 };
+  }
+
   think(dt, you) {
     const ai = this.ai, e = this.evil.body, w = this.world, sk = this.skill;
     const inp = emptyInput();
@@ -344,17 +390,13 @@ export class Fight {
     } else want = Math.sign(dx);
 
     // don't walk into goo or off a cliff into it
-    const col = Math.floor((e.pos.x + want * 30) / T), feet = Math.floor((e.pos.y + e.half.y + 2) / T);
     let danger = false, gap = false;
-    if (want !== 0 && e.onGround) {
-      let found = null;
-      for (let y = feet; y < feet + 7; y++) { const c = w.at(col, y); if (c === '~') { found = 'goo'; break; } if (w.isSolid(col, y)) { found = 'ground'; break; } }
-      if (found === 'goo') { danger = true; gap = true; }
-    }
-    if (danger) {
+    if (want !== 0 && e.onGround && this.gooAhead(e, want)) {
+      danger = true; gap = true;
       // jump the pit if there is ground within reach on the far side, otherwise stop
+      const col = Math.floor((e.pos.x + want * 30) / T), feet = Math.floor((e.pos.y + e.half.y + 2) / T);
       let across = false;
-      for (let k = 2; k <= 5; k++) if (w.isSolid(col + want * k, feet) ) { across = true; break; }
+      for (let k = 2; k <= 5; k++) if (w.isSolid(col + want * k, feet)) { across = true; break; }
       if (!across) want = 0;
     }
     // a wall or step in the way
@@ -362,13 +404,41 @@ export class Fight {
     const blocked = want !== 0 && w.isSolid(ahead, kneeRow);
     inp.moveX = want;
     inp.jumpHeld = false;
-    const wantsUp = dy < -60 && Math.abs(dx) < 330 && w.isSolid(Math.floor(e.pos.x / T), Math.floor((e.pos.y - 110) / T));
-    if (e.onGround && ai.jumpCd <= 0 && (blocked || gap && danger || (dy < -60 && Math.random() < 0.05) || wantsUp || (Math.random() < 0.004 + 0.01 * sk))) {
-      inp.jumpPressed = true; inp.jumpHeld = true; ai.jumpCd = 0.5;
-    } else if (!e.onGround && e.vel.y < 0 && ai.jumpCd > 0.3) inp.jumpHeld = true;
-    // unstick: if barely moving for a while, hop
-    ai.stuckT = Math.abs(e.pos.x - ai.lastX) < 0.5 && want !== 0 ? ai.stuckT + dt : 0; ai.lastX = e.pos.x;
-    if (ai.stuckT > 0.5 && e.onGround) { inp.jumpPressed = true; inp.jumpHeld = true; ai.stuckT = 0; }
+    // climbing, dropping and crossing between platforms when the player is on a different level
+    // if the route keeps failing (a lift, gel or a hazard in the way), shake it up for a moment
+    const here = this.platformOf(e);
+    if (here !== ai.lastPlat) { ai.lastPlat = here; ai.platT = 0; } else ai.platT = (ai.platT || 0) + dt;
+    if (ai.platT > 3.5 && Math.abs(dy) > 60) { ai.wander = 1.1; ai.platT = 0; ai.wanderDir = Math.random() < 0.5 ? -1 : 1; }
+    ai.wander = Math.max(0, (ai.wander || 0) - dt);
+    const hop = Math.abs(dy) > 60 && ai.wander <= 0 ? this.navigate(e, p) : null;
+    if (ai.wander > 0) {
+      inp.moveX = ai.wanderDir;
+      if (e.onGround && ai.jumpCd <= 0 && !this.gooAhead(e, ai.wanderDir)) { inp.jumpPressed = true; inp.jumpHeld = true; ai.jumpCd = 0.4; }
+      else if (!e.onGround && e.vel.y < 0) inp.jumpHeld = true;
+    } else if (hop) {
+      const pit = hop.move && e.onGround && this.gooAhead(e, hop.move);
+      if (!pit) {
+        inp.moveX = hop.move;
+        if (hop.jump && ai.jumpCd <= 0) { inp.jumpPressed = true; inp.jumpHeld = true; ai.jumpCd = 0.45; }
+        else if (!e.onGround && e.vel.y < 0 && ai.jumpCd > 0.25) inp.jumpHeld = true;
+      } else {
+        // a pit in the way: hop it if there is ground on the far side, otherwise wait
+        const col = Math.floor((e.pos.x + hop.move * 30) / T), feet = Math.floor((e.pos.y + e.half.y + 2) / T);
+        let across = false;
+        for (let k = 2; k <= 5; k++) if (w.isSolid(col + hop.move * k, feet)) { across = true; break; }
+        inp.moveX = across ? hop.move : 0;
+        if (across && ai.jumpCd <= 0) { inp.jumpPressed = true; inp.jumpHeld = true; ai.jumpCd = 0.5; }
+      }
+      ai.lastX = e.pos.x; ai.stuckT = 0;
+    } else {
+      // a wall or step in the way, or a pit to hop, or just a restless hop now and then
+      const wantsUp = dy < -60 && Math.abs(dx) < 330 && w.isSolid(Math.floor(e.pos.x / T), Math.floor((e.pos.y - 110) / T));
+      if (e.onGround && ai.jumpCd <= 0 && (blocked || gap && danger || wantsUp || (Math.random() < 0.004 + 0.01 * sk))) {
+        inp.jumpPressed = true; inp.jumpHeld = true; ai.jumpCd = 0.5;
+      } else if (!e.onGround && e.vel.y < 0 && ai.jumpCd > 0.3) inp.jumpHeld = true;
+      ai.stuckT = Math.abs(e.pos.x - ai.lastX) < 0.5 && want !== 0 ? ai.stuckT + dt : 0; ai.lastX = e.pos.x;
+      if (ai.stuckT > 0.5 && e.onGround) { inp.jumpPressed = true; inp.jumpHeld = true; ai.stuckT = 0; }
+    }
 
     // dodge incoming bolts
     if (ai.dodgeCd <= 0 && e.onGround) {
@@ -419,7 +489,7 @@ export class Fight {
     this.phaseT += dt;
     const w = this.world;
     if (this.phase === 'intro') {
-      if (this.phaseT > 2.4) { this.phase = 'fight'; this.phaseT = 0; }
+      if (this.phaseT > 3.2) { this.phase = 'fight'; this.phaseT = 0; }
     } else if (this.phase === 'roundEnd') {
       this.slow = lerp(this.slow, 0.5, 0.1);
       if (this.phaseT > 2.4) {
@@ -447,6 +517,7 @@ export class Fight {
     }
     if (this.acc > K.SimDt * 10) this.acc = 0;
     for (const f of this.fighters) f.flash = Math.max(0, f.flash - dt * 4);
+    for (let i = this.floaters.length - 1; i >= 0; i--) { this.floaters[i].t += dt; if (this.floaters[i].t > 0.9) this.floaters.splice(i, 1); }
   }
 
   simStep(dt, playerInput, live) {
@@ -491,24 +562,44 @@ export class Fight {
 
   // ---------------------------------------------------------------- drawing (world space)
 
-  /** Called inside the renderer's world pass: bolts, pickups, shields and the twin's aura. */
+  /** Called inside the renderer's world pass: bolts, pickups, shields, health bars and damage numbers. */
   drawOverlay(g, w) {
     if (w !== this.world) return;
     const t = this.time;
     g.additive = true;
-    // the evil twin's aura
     const e = this.evil.body;
-    if (!e.dead) g.circleGrad(e.pos.x, e.pos.y, 44 + Math.sin(t * 6) * 4, C(255, 40, 60, 70), C(255, 40, 60, 0));
+    if (!e.dead) {
+      g.circleGrad(e.pos.x, e.pos.y, 46 + Math.sin(t * 6) * 4, C(255, 40, 60, 80), C(255, 40, 60, 0));
+      // burning eyes
+      g.circleGrad(e.pos.x + e.facing * 5, e.pos.y - 9, 7, C(255, 60, 60, 230), C(255, 60, 60, 0));
+    }
     for (const f of this.fighters) {
       const b = f.body;
       if (b.dead) continue;
-      if (f.flash > 0.05) g.circleGrad(b.pos.x, b.pos.y, 40, C(255, 255, 255, 190 * f.flash), C(255, 255, 255, 0));
+      if (f.flash > 0.05) g.circleGrad(b.pos.x, b.pos.y, 44, C(255, 255, 255, 220 * f.flash), C(255, 255, 255, 0));
       if (f.shield > 0) {
-        g.circleGrad(b.pos.x, b.pos.y, 34, C(120, 200, 255, 10), C(120, 200, 255, 0));
-        for (let k = 0; k < 28; k++) { const a = k / 28 * Math.PI * 2 + t * 2; g.rect(snap2(b.pos.x + Math.cos(a) * 26), snap2(b.pos.y + Math.sin(a) * 28), 2, 2, C(160, 220, 255, 150)); }
+        g.circleGrad(b.pos.x, b.pos.y, 36, C(120, 200, 255, 14), C(120, 200, 255, 0));
+        for (let k = 0; k < 28; k++) { const a = k / 28 * Math.PI * 2 + t * 2; g.rect(snap2(b.pos.x + Math.cos(a) * 26), snap2(b.pos.y + Math.sin(a) * 28), 2, 2, C(160, 220, 255, 170)); }
       }
       if (f.rapid > 0) for (let k = 0; k < 3; k++) { const a = t * 9 + k * 2.1; g.rect(snap2(b.pos.x + Math.cos(a) * 18), snap2(b.pos.y + Math.sin(a) * 20), 2, 2, C(255, 190, 60, 230)); }
     }
+    g.additive = false;
+    // floating health and energy bars, and a marker so you always know which one is you
+    for (const f of this.fighters) {
+      const b = f.body;
+      if (b.dead) continue;
+      const x = Math.round(b.pos.x) - 20, y = Math.round(b.pos.y) - 36, hp = clamp01(f.hp / f.max);
+      g.rect(x - 2, y - 2, 44, 10, C(8, 10, 14, 220));
+      g.rect(x, y, Math.round(40 * hp), 4, f.isYou ? (hp > 0.35 ? PP.OrangeRamp[2] : C(255, 90, 60)) : C(230, 60, 80));
+      g.rect(x, y + 5, Math.round(40 * clamp01(f.energy / 100)), 2, f.rapid > 0 ? C(255, 190, 60) : PP.BlueRamp[2]);
+      const mc = f.isYou ? PP.BlueRamp[3] : C(255, 110, 120), my = y - 10 + Math.round(Math.sin(t * 5) * 1) * 2;
+      g.rect(x + 16, my, 8, 2, mc); g.rect(x + 18, my + 2, 4, 2, mc); g.rect(x + 19, my + 4, 2, 2, mc);
+    }
+    for (const fl of this.floaters) {
+      const a = 1 - fl.t / 0.9;
+      PixelFont.draw(g, fl.text, V(Math.round(fl.x) - 6, Math.round(fl.y - fl.t * 40)), 2, withAlpha(fl.col, clamp01(a * 1.5)));
+    }
+    g.additive = true;
     for (const p of this.pickups) {
       const col = PICK_COL[p.type], bob = Math.sin(p.t * 3) * 3, x = Math.round(p.x), y = snap2(p.y + bob);
       g.circleGrad(p.x, p.y + bob, 34, withAlpha(col, 0.5), withAlpha(col, 0));
@@ -523,8 +614,9 @@ export class Fight {
     }
     for (const b of this.bolts) {
       const col = b.owner.isYou ? PP.BlueRamp[3] : C(255, 110, 90);
-      for (let i = 0; i < b.trail.length; i++) { const q = b.trail[i], a = (i + 1) / b.trail.length; g.circleGrad(q.x, q.y, 6 + a * 6, withAlpha(col, 0.25 * a), withAlpha(col, 0)); }
-      g.circleGrad(b.x, b.y, 22, withAlpha(col, 0.7), withAlpha(col, 0));
+      for (let i = 0; i < b.trail.length; i++) { const q = b.trail[i], a = (i + 1) / b.trail.length; g.circleGrad(q.x, q.y, 8 + a * 8, withAlpha(col, 0.3 * a), withAlpha(col, 0)); }
+      g.circleGrad(b.x, b.y, 28, withAlpha(col, 0.8), withAlpha(col, 0));
+      g.rect(snap2(b.x) - 4, snap2(b.y) - 4, 8, 8, withAlpha(col, 0.9));
       g.rect(snap2(b.x) - 2, snap2(b.y) - 2, 4, 4, C(255, 255, 255, 255));
     }
     g.additive = false;
@@ -533,51 +625,56 @@ export class Fight {
   /** Lights for the renderer (bolts and pickups glow on the walls around them). */
   lights() {
     const out = [];
-    for (const b of this.bolts) out.push({ x: b.x, y: b.y, r: 110, col: withAlpha(b.owner.isYou ? PP.BlueRamp[2] : C(255, 80, 60), 0.7) });
+    for (const b of this.bolts) out.push({ x: b.x, y: b.y, r: 120, col: withAlpha(b.owner.isYou ? PP.BlueRamp[2] : C(255, 80, 60), 0.75) });
     for (const p of this.pickups) out.push({ x: p.x, y: p.y, r: 90, col: withAlpha(PICK_COL[p.type], 0.45) });
     const e = this.evil.body;
     if (!e.dead) out.push({ x: e.pos.x, y: e.pos.y - 4, r: 130, col: C(255, 40, 60, 70) });
     return out;
   }
 
-  // ---------------------------------------------------------------- HUD
+  // ---------------------------------------------------------------- HUD (screen space, in the margin above the arena)
 
   drawHud(g, UI, Align) {
-    const W = K.ScreenW, mid = W / 2;
-    const bar = (x, y, w, f, fillCol, align) => {
-      g.rect(x - 2, y - 2, w + 4, 22, C(10, 12, 18, 220));
-      const fw = Math.round(w * clamp01(f.hp / f.max));
-      g.rect(align === 'r' ? x + w - fw : x, y, fw, 18, fillCol);
-      g.rect(align === 'r' ? x + w - fw : x, y, fw, 4, withAlpha(C(255, 255, 255), 0.35));
-      const ew = Math.round(w * 0.6 * clamp01(f.energy / 100));
-      g.rect(align === 'r' ? x + w - w * 0.6 : x, y + 24, Math.round(w * 0.6), 6, C(10, 12, 18, 220));
-      g.rect(align === 'r' ? x + w - ew : x, y + 25, ew, 4, f.rapid > 0 ? C(255, 190, 60) : PP.BlueRamp[2]);
+    const W = K.ScreenW, mid = W / 2, left = (W - ARENA_W * T) / 2, right = W - left, bw = 400;
+    const bar = (x, y, f, fillCol, alignRight) => {
+      g.rect(x - 2, y - 2, bw + 4, 22, C(10, 12, 18, 230));
+      const fw = Math.round(bw * clamp01(f.hp / f.max));
+      g.rect(alignRight ? x + bw - fw : x, y, fw, 18, fillCol);
+      g.rect(alignRight ? x + bw - fw : x, y, fw, 4, withAlpha(C(255, 255, 255), 0.35));
+      const ew = Math.round(bw * 0.55 * clamp01(f.energy / 100));
+      g.rect(alignRight ? x + bw - bw * 0.55 : x, y + 22, Math.round(bw * 0.55), 6, C(10, 12, 18, 230));
+      g.rect(alignRight ? x + bw - ew : x, y + 23, ew, 4, f.rapid > 0 ? C(255, 190, 60) : PP.BlueRamp[2]);
     };
-    bar(30, 26, 440, this.you, PP.OrangeRamp[2], 'l');
-    bar(W - 30 - 440, 26, 440, this.evil, C(220, 50, 70), 'r');
-    UI.text(`YOU ${Math.ceil(this.you.hp)}`, V(32, 62), 16, PP.CreamHi);
-    UI.text(`EVIL TWIN ${Math.ceil(this.evil.hp)}`, V(W - 32, 62), 16, C(255, 150, 160), Align.Right);
+    bar(left, 12, this.you, PP.OrangeRamp[2], false);
+    bar(right - bw, 12, this.evil, C(220, 50, 70), true);
+    UI.text(`YOU  ${Math.ceil(this.you.hp)}`, V(left, 46), 16, PP.CreamHi);
+    UI.text(`${Math.ceil(this.evil.hp)}  EVIL TWIN`, V(right, 46), 16, C(255, 150, 160), Align.Right);
     const tags = (f, x, dir) => {
       let ox = x;
-      if (f.shield > 0) { UI.text('SHIELD', V(ox, 84), 16, PP.BlueRamp[3], dir < 0 ? Align.Right : Align.Left); ox += dir * 90; }
-      if (f.rapid > 0) UI.text(`RAPID ${Math.ceil(f.rapid)}`, V(ox, 84), 16, C(255, 190, 60), dir < 0 ? Align.Right : Align.Left);
+      if (f.shield > 0) { UI.text('SHIELD', V(ox, 46), 16, PP.BlueRamp[3], dir < 0 ? Align.Right : Align.Left); ox += dir * 90; }
+      if (f.rapid > 0) UI.text(`RAPID ${Math.ceil(f.rapid)}`, V(ox, 46), 16, C(255, 190, 60), dir < 0 ? Align.Right : Align.Left);
     };
-    tags(this.you, 32, 1); tags(this.evil, W - 32, -1);
-    // round pips
+    tags(this.you, left + 130, 1); tags(this.evil, right - 170, -1);
     for (let i = 0; i < 3; i++) {
-      g.rect(mid - 60 - i * 26, 30, 18, 18, i < this.wins ? PP.OrangeRamp[2] : C(40, 44, 56));
-      g.rect(mid + 42 + i * 26, 30, 18, 18, i < this.losses ? C(220, 50, 70) : C(40, 44, 56));
+      g.rect(mid - 52 - i * 22, 16, 16, 16, i < this.wins ? PP.OrangeRamp[2] : C(40, 44, 56));
+      g.rect(mid + 36 + i * 22, 16, 16, 16, i < this.losses ? C(220, 50, 70) : C(40, 44, 56));
     }
-    UI.text(`ROUND ${this.roundNo}   FIRST TO 3`, V(mid, 66), 16, C(150, 156, 170), Align.Center);
-    if (this.modifier.name) UI.text(this.modifier.name, V(mid, 88), 16, PP.Hazard, Align.Center);
+    UI.text(`ROUND ${this.roundNo}`, V(mid, 42), 16, C(190, 196, 210), Align.Center);
+    if (this.modifier.name) UI.text(this.modifier.name, V(mid, 62), 16, PP.Hazard, Align.Center);
+    UI.text('CLICK  PORTALS      Q  BOLT      E  GRAB A CUBE      ESC  PAUSE', V(mid, K.ScreenH - 36), 16, withAlpha(C(190, 196, 210), 0.55), Align.Center);
 
+    const cy = K.ScreenH / 2 - 40;
     if (this.phase === 'intro') {
-      const a = clamp01(this.phaseT * 4) * clamp01((2.4 - this.phaseT) * 3);
-      UI.textShadow(this.phaseT < 1.7 ? `ROUND ${this.roundNo}` : 'FIGHT!', V(mid, 300), this.phaseT < 1.7 ? 72 : 90, withAlpha(this.phaseT < 1.7 ? PP.CreamHi : PP.Hazard, a), Align.Center);
-      if (this.modifier.name && this.phaseT < 1.7) UI.text(this.modifier.name, V(mid, 380), 30, withAlpha(PP.Hazard, a), Align.Center);
-      if (this.roundNo === 1 && this.phaseT < 1.7) UI.text('LEFT CLICK  BLUE PORTAL    RIGHT CLICK  ORANGE    Q  FIRE A BOLT    E  GRAB A CUBE', V(mid, 440), 16, withAlpha(PP.Cream, a), Align.Center);
+      const pt = this.phaseT, a = clamp01(pt * 5);
+      let txt = `ROUND ${this.roundNo}`, size = 72, col = PP.CreamHi;
+      if (pt > 2.7) { txt = 'FIGHT!'; size = 100; col = PP.Hazard; }
+      else if (pt > 2.2) { txt = '1'; size = 120; }
+      else if (pt > 1.7) { txt = '2'; size = 120; }
+      else if (pt > 1.2) { txt = '3'; size = 120; }
+      UI.textShadow(txt, V(mid, cy), size, withAlpha(col, a), Align.Center);
+      if (pt < 1.2 && this.modifier.name) UI.text(this.modifier.name, V(mid, cy + 70), 30, withAlpha(PP.Hazard, a), Align.Center);
     } else if (this.phase === 'roundEnd') {
-      UI.textShadow(this.message, V(mid, 300), 90, withAlpha(this.message === 'K.O.!' ? PP.Exit : C(255, 90, 80), clamp01(this.phaseT * 5)), Align.Center);
+      UI.textShadow(this.message, V(mid, cy), 100, withAlpha(this.message === 'K.O.!' ? PP.Exit : C(255, 90, 80), clamp01(this.phaseT * 5)), Align.Center);
     }
   }
 }

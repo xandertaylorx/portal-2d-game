@@ -2,6 +2,20 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.18.0] - 2026-10-25
+
+### Changed
+- **Chambers 101-120 are far harder.** They are now long, dense gauntlets (8 to 17 linked challenges, wider than the Final Exam) and the exit
+  is locked behind the weight circuits. New challenges include laser-and-door puzzles where you must put a portal where the beam hits,
+  timed doors you have to sprint to with portals set up in advance, launch-plate flings over huge pits, and sentry-guarded
+  pits. Random tests use the same new challenges and get longer, up to nine linked challenges.
+- **Fight mode reworked.** A smaller arena so you always see everything, floating health and energy bars over each fighter, damage numbers,
+  a 3-2-1 countdown, bigger bolts and hit flashes, a controls reminder, and a calmer start (the evil twin is slower to open fire in
+  early matches). The twin now climbs between platforms to chase you, hops pits and avoids lifts.
+
+### Fixed
+- The best-run ghost no longer glides through walls when your run used a portal: it now snaps across.
+
 ## [2.17.0] - 2026-10-25
 
 ### Added

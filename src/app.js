@@ -16,7 +16,7 @@ import { Fight, ARENA_W, ARENA_H } from './fight.js';
 import { MapLibrary } from './library.js';
 import { pickRandomTest } from './random.js';
 
-export const VERSION = '2.17.0';
+export const VERSION = '2.18.0';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 

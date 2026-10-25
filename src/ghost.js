@@ -49,8 +49,11 @@ export class GhostPlayback {
     if (this.n === 0) return null;
     const f = Math.min(t * HZ, this.n - 1), i = Math.floor(f), j = Math.min(i + 1, this.n - 1), k = f - i;
     const p = this.pose;
-    p.pos.x = this.xs[i] + (this.xs[j] - this.xs[i]) * k;
-    p.pos.y = this.ys[i] + (this.ys[j] - this.ys[i]) * k;
+    // a jump this big in one sample is a portal trip (or a respawn): hold the old spot, then snap, rather than gliding through the walls between
+    const far = Math.hypot(this.xs[j] - this.xs[i], this.ys[j] - this.ys[i]) > 110;
+    const kk = far ? 0 : k;
+    p.pos.x = this.xs[i] + (this.xs[j] - this.xs[i]) * kk;
+    p.pos.y = this.ys[i] + (this.ys[j] - this.ys[i]) * kk;
     const fl = this.fl[i];
     p.onGround = !!(fl & 1);
     p.vel.x = fl & 2 ? (fl & 8 ? 100 : -100) : 0;
@@ -59,7 +62,7 @@ export class GhostPlayback {
     p.lastShot = fl & 16 ? 1 : 0;
     const ang = ((fl >> 5) / AIM_STEPS) * Math.PI * 2;
     p.aim.x = Math.cos(ang); p.aim.y = Math.sin(ang);
-    if (i !== this.lastI) { this.dist += Math.abs(this.xs[j] - this.xs[i]); this.lastI = i; }
+    if (i !== this.lastI) { if (!far) this.dist += Math.abs(this.xs[j] - this.xs[i]); this.lastI = i; }
     p.walkPhase = this.dist * 0.045 * 1.4;
     return p;
   }

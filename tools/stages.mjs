@@ -89,7 +89,7 @@ export const STAGES = {
   // a cube on a button holds the door open
   button: {
     mech: 'button', gun: false, hint: 'A CUBE ON THE BUTTON HOLDS THE DOOR OPEN. PICK IT UP WITH E.',
-    plan: (r) => ({ grp: ri(r, 0, 2) }),
+    plan: (r, ctx) => ({ grp: ctx.group() }),
     width: () => 12,
     draw(g, x0, p) {
       g.set(x0 + 1, FLOOR - 1, 'C'); g.set(x0 + 5, FLOOR - 1, '123xyz'[p.grp]);
@@ -198,6 +198,61 @@ export const STAGES = {
     },
   },
 
+  // a laser blocked by a wall: put a portal where it hits, and one where you want it to go
+  laserdoor: {
+    mech: 'laser', gun: true, hint: 'A BEAM CAN GO THROUGH A PORTAL. THE DOOR OPENS WHEN THE TARGET IS HIT.',
+    plan: (r, ctx) => ({ grp: ctx.group() }),
+    width: () => 26,
+    draw(g, x0, p) {
+      g.set(x0, 3, '>');
+      g.fill(x0 + 8, 1, x0 + 8, 6, '#'); g.fill(x0 + 13, 1, x0 + 13, 6, '#');
+      g.fill(x0 + 22, 1, x0 + 22, FLOOR - 1, 'X');
+      g.set(x0 + 22, 4, '456rst'[p.grp]);      // the beam comes out of the portal one row low, so the target sits at row 4
+      g.fill(x0 + 22, 8, x0 + 22, FLOOR - 1, String.fromCharCode(97 + p.grp));
+    },
+    run(bot, x0, p) {
+      bot.walkTo(cx(x0 + 4), 5);
+      bot.shoot('blue', (x0 + 8) * T + 8, 112);
+      bot.walkTo(cx(x0 + 16), 5);
+      bot.shoot('orange', (x0 + 13) * T + 8, 112);
+      bot.until((b) => !b.w.isSolid(x0 + 22, FLOOR - 1), 400, 'the laser to open the door');
+      bot.walkTo(cx(x0 + 24), 6);
+    },
+  },
+
+  // a timed button and a door far away: set up the portals first, then sprint
+  timed: {
+    mech: 'timed', gun: true, hint: 'THE DOOR ONLY STAYS OPEN FOR A FEW SECONDS.',
+    plan: (r, ctx) => ({ grp: ctx.group() }),
+    width: () => 23,
+    draw(g, x0, p) {
+      g.set(x0 + 3, FLOOR - 1, 'TUVWYZ'[p.grp]);
+      g.fill(x0 + 9, 6, x0 + 9, FLOOR - 1, '#'); g.fill(x0 + 10, 0, x0 + 14, 0, '#');
+      g.fill(x0 + 20, 1, x0 + 20, FLOOR - 1, String.fromCharCode(97 + p.grp));
+    },
+    run(bot, x0) {
+      bot.walkTo(cx(x0), 5);
+      bot.shoot('blue', (x0 + 9) * T + 8, 340);
+      bot.shoot('orange', cx(x0 + 12), 28);
+      bot.walkTo(cx(x0 + 3), 3);
+      bot.hold(1, (c) => c.p.pos.x > (x0 + 22) * T, 500, 'the sprint to the door');
+      bot.stop();
+    },
+  },
+
+  // a launch plate throws you across a pit that is far too wide to jump
+  fling: {
+    mech: 'plate', gun: false, hint: 'A LAUNCH PLATE THROWS YOU UP AND FORWARD.',
+    plan: (r) => ({ g: ri(r, 8, 10) }),
+    width: (p) => 8 + p.g + 6,
+    draw(g, x0, p) { g.set(x0 + 4, FLOOR, 'Q'); g.fill(x0 + 5, FLOOR, x0 + 4 + p.g, FLOOR + 1, '~'); },
+    run(bot, x0, p) {
+      bot.walkTo(cx(x0 + 1), 5);
+      bot.hold(1, (c) => c.p.pos.x > (x0 + 5 + p.g) * T + 30 && c.p.onGround, 500, 'landing across the pit');
+      bot.stop();
+    },
+  },
+
   // two sentries and a ride up: turret nest above a lift
   nest: {
     mech: 'turret', gun: false, hint: '',
@@ -228,7 +283,8 @@ export const STAGES = {
 /** Builds one chamber from a list of stage ids. Returns { raw, solution, frames } or throws if the bot cannot solve it. */
 export function buildChamber(name, ids, seed, opts = {}) {
   const r = rng(seed);
-  const plans = ids.map((id) => STAGES[id].plan(r));
+  const ctx = { used: 0, group() { if (this.used >= 6) throw new Error('too many circuits'); return this.used++; } };
+  const plans = ids.map((id) => STAGES[id].plan(r, ctx));
   const widths = ids.map((id, i) => STAGES[id].width(plans[i]));
   const startW = 6, endW = 7;
   const W = 1 + startW + widths.reduce((a, b) => a + b, 0) + endW + 1;
@@ -249,7 +305,7 @@ export function buildChamber(name, ids, seed, opts = {}) {
   const raw = {
     name, map: g.rows(), gun, blue: [1, 0], orange: [1, 0], hints: opts.hints || hints.slice(0, 2), fling: false, label: opts.label || '',
     theme: opts.theme ?? ri(r, 1, 6), seed, family: ids.join('+'), layoutId: `${name}:${seed}`, mechanics: [...new Set(ids.map((id) => STAGES[id].mech))],
-    difficulty: opts.difficulty || 0, exitGroups: [], tutorial: false,
+    difficulty: opts.difficulty || 0, exitGroups: opts.gate ? ids.flatMap((id, i) => (id === 'button' ? [plans[i].grp] : [])) : [], tutorial: false,
   };
   const bot = new Bot(raw);
   ids.forEach((id, i) => STAGES[id].run(bot, xs[i], plans[i]));
