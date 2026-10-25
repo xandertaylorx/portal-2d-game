@@ -2,6 +2,16 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.14.0] - 2026-10-25
+
+### Changed
+- **Portal animations.** A new portal opens as a thin slit that stretches to full length and then swells to full
+  thickness, with a flash of light and an expanding ring of energy.
+- Passing through a portal now pulses both ends: the lens swirls faster and brightens, the rim flashes white, rings
+  ripple out, and the portals light up the room. You come out the other side with speed streaks, and you squash and
+  stretch along the direction you fly.
+- Replaced or cleared portals collapse and fizzle away instead of vanishing instantly.
+
 ## [2.13.1] - 2026-10-25
 
 ### Changed

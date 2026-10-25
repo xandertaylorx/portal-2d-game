@@ -108,6 +108,8 @@ export class Portal {
     this.fixed = isFixed;
     this.open = 0;
     this.age = 0;
+    this.pulse = 0;      // visual only: kicked to 1 when something crosses, fades out
+    this.closeT = 0;     // visual only: > 0 on a ghost that is collapsing after being replaced
   }
   get isWall() { return Math.abs(this.normal.x) > 0.5; }
   covers(x, y) { return (this.tileA.x === x && this.tileA.y === y) || (this.tileB.x === x && this.tileB.y === y); }

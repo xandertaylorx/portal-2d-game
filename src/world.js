@@ -133,6 +133,7 @@ export class World {
     this.player = null;
     this.cubes = []; this.buttons = []; this.emitters = []; this.receivers = [];
     this.portals = [null, null];
+    this.fading = [];   // visual only: replaced portals collapsing away
     this.doorOpen = new Array(World.Groups).fill(0);
     this.groupActive = new Array(World.Groups).fill(false);
     this.lasers = []; this.laserImpacts = []; this.events = [];
@@ -265,6 +266,7 @@ export class World {
     p.lastShot = color;
     p.gunKick = 1;
     if (cand && !(this.portals[color]?.fixed)) {
+      if (this.portals[color]) this.retire(this.portals[color]);
       this.portals[color] = cand;
       this.portalsPlaced++;
       this.fx.burst(cand.center, col, 26, 260, 0.6, 3.5, 0, PKind.Spark, true, cand.normal, 1.2);
@@ -283,11 +285,15 @@ export class World {
     return null;
   }
 
+  /** Hands a portal that is going away to the renderer so it can collapse instead of vanishing. */
+  retire(p) { this.fading.push(p); p.closeT = 0.001; }
+
   clearPlayerPortals() {
     let any = false;
     for (let i = 0; i < 2; i++) {
       const p = this.portals[i];
       if (p && !p.fixed) {
+        this.retire(p);
         this.fx.burst(p.center, i === 0 ? Palette.Blue : Palette.Orange, 30, 200, 0.7, 3);
         this.portals[i] = null;
         any = true;
@@ -302,7 +308,12 @@ export class World {
 
   update(dt, input) {
     this.time += dt;
-    for (const p of this.portals) if (p) { p.open = Math.min(1, p.open + dt * 5); p.age += dt; }
+    for (const p of this.portals) if (p) { p.open = Math.min(1, p.open + dt * 3.4); p.age += dt; p.pulse = Math.max(0, p.pulse - dt * 2.2); }
+    for (let i = this.fading.length - 1; i >= 0; i--) {
+      const f = this.fading[i];
+      f.closeT += dt * 5; f.age += dt; f.pulse = Math.max(0, f.pulse - dt * 2.2);
+      if (f.closeT >= 1) this.fading.splice(i, 1);
+    }
     if (this.player) this.updatePlayer(this.player, dt, input);
     for (const c of this.cubes) this.updateCube(c, dt);
     this.computeLasers();
@@ -585,12 +596,16 @@ export class World {
       b.pos = np;
       b.vel = nv;
       b.teleportFlash = 1;
+      p.pulse = 1; q.pulse = 1;
       b.teleports++;
       b.onGround = false;
       const colA = i === 0 ? Palette.Blue : Palette.Orange;
       const colB = i === 0 ? Palette.Orange : Palette.Blue;
       this.fx.burst(p.center, colA, 12, 150, 0.4, 2.5, 0, PKind.Spark, true, V(-p.normal.x, -p.normal.y), 1.0);
       this.fx.burst(q.center, colB, 16, 220, 0.5, 2.5, 0, PKind.Spark, true, q.normal, 1.0);
+      // speed streaks fire out of the exit along the way the body is flying
+      const sp = Math.hypot(nv.x, nv.y);
+      this.fx.burst(V(q.center.x + q.normal.x * 6, q.center.y + q.normal.y * 6), mix(colB, Palette.White, 0.5), 8 + Math.trunc(sp / 120), sp * 0.7, 0.35, 2.5, 0, PKind.Spark, true, V(nv.x, nv.y), 0.3);
       if (b instanceof Player) {
         b.jumpCut = true;
         this.emit(Sfx.Teleport, q.center);

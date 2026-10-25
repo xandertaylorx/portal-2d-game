@@ -147,6 +147,7 @@ export class Renderer {
     for (const e of w.emitters) this.drawEmitterGlow(e);
     this.drawLasers(w);
     this.drawParticles(w);
+    for (const f of w.fading) this.drawPortal(f, w.linked);
     if (drawPortals) for (const p of w.portals) if (p) this.drawPortal(p, w.linked);
   }
 
@@ -407,6 +408,15 @@ export class Renderer {
     const f = p.facing;
     const sw = f > 0 ? 16 : -16;
     const dx = feet.x - 16, dy = feet.y - PLAYER_H * 2 + 2;
+    // squash & stretch along the way you fly out of a portal
+    const stretching = p.teleportFlash > 0.02;
+    if (stretching) {
+      const e = Math.pow(p.teleportFlash, 1.5), horiz = Math.abs(p.vel.x) > Math.abs(p.vel.y);
+      const sx = horiz ? 1 + 0.4 * e : 1 - 0.18 * e, sy = horiz ? 1 - 0.18 * e : 1 + 0.4 * e;
+      const cx = feet.x, cy = feet.y - PLAYER_H;
+      g.push();
+      g.mult([sx, 0, 0, sy, cx * (1 - sx), cy * (1 - sy)]);
+    }
     g.tex(Sprites.playerTex, frame * 16, 0, sw, PLAYER_H, dx, dy, 32, PLAYER_H * 2);
     if (p.teleportFlash > 0.05) {
       g.additive = true;
@@ -433,7 +443,7 @@ export class Renderer {
     g.rect(Math.trunc(snap(tip.x)), Math.trunc(snap(tip.y)), 2, 2, gunCol);
     g.additive = true;
     g.circleGrad(tip.x, tip.y, 10 + p.gunKick * 10, withAlpha(gunCol, 150 / 255), withAlpha(gunCol, 0));
-    g.additive = false;
+    g.additive = false;    if (stretching) g.pop();
   }
 
   // ================================================================ lasers & particles
@@ -552,10 +562,15 @@ export class Renderer {
     }
     for (const p of w.portals) {
       if (!p || p.open < 0.05) continue;
-      const open = easeOutBack(p.open), col = p.color === PortalColor.Blue ? PP.BlueRamp[2] : PP.OrangeRamp[2];
-      const pulse = 1 + 0.06 * Math.sin(t * 5 + p.color);
-      this.castLight(w, p.center.x + p.normal.x * 10, p.center.y + p.normal.y * 10, 230 * open * pulse, withAlpha(col, 0.95), view);
-      this.castLight(w, p.center.x + p.normal.x * 6, p.center.y + p.normal.y * 6, 70 * open, withAlpha(mix(col, C(255, 255, 255), 0.6), 0.8), view);
+      const open = easeOutBack(clamp01(p.open * 1.5)), col = p.color === PortalColor.Blue ? PP.BlueRamp[2] : PP.OrangeRamp[2];
+      const zap = clamp01(p.pulse || 0), flash = Math.exp(-p.age * 7);       // a burst of light when it opens or is used
+      const pulse = 1 + 0.06 * Math.sin(t * 5 + p.color) + 0.25 * zap + 0.3 * flash;
+      this.castLight(w, p.center.x + p.normal.x * 10, p.center.y + p.normal.y * 10, 230 * open * pulse, withAlpha(col, Math.min(1, 0.95 + 0.4 * zap)), view);
+      this.castLight(w, p.center.x + p.normal.x * 6, p.center.y + p.normal.y * 6, 70 * open * (1 + zap), withAlpha(mix(col, C(255, 255, 255), 0.6), Math.min(1, 0.8 + 0.5 * zap + 0.5 * flash)), view);
+    }
+    for (const f of w.fading) {
+      const open = (1 - f.closeT) * (1 - f.closeT), col = f.color === PortalColor.Blue ? PP.BlueRamp[2] : PP.OrangeRamp[2];
+      this.castLight(w, f.center.x + f.normal.x * 10, f.center.y + f.normal.y * 10, 200 * open, withAlpha(col, 0.9 * open), view);
     }
     for (const s of w.lasers) {
       const len = Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y);
@@ -677,17 +692,19 @@ export class Renderer {
   /** Linked portal drawn as a lens showing a live, parallaxed view out of its partner. */
   drawLens(w, x, eye, index) {
     const g = this.gfx, t = this.time;
-    const open = easeOutBack(x.open);
+    // opening: the slit stretches to full length first, then swells to full thickness (with a little overshoot)
+    const open = easeOutBack(clamp01(x.open * 1.5)), thick = easeOutBack(clamp01((x.open - 0.2) / 0.8));
+    const zap = clamp01(x.pulse || 0);
     const tint = x.color === PortalColor.Blue ? PP.BlueRamp[2] : PP.OrangeRamp[2];
     const deep = x.color === PortalColor.Blue ? PP.BlueRamp[0] : PP.OrangeRamp[0];
-    const pulse = 1 + 0.04 * Math.sin(t * 5 + x.color);
-    const ra = 25 * open * pulse, rb = 15 * open * pulse;           // canvas pixels
+    const pulse = 1 + 0.04 * Math.sin(t * 5 + x.color) + 0.12 * zap * zap;
+    const ra = 25 * open * pulse, rb = Math.max(1, 15 * thick * pulse);           // canvas pixels
     if (ra < 1) return;
     const raW = ra / K.Px, rbW = rb / K.Px;
     const c = x.center;
 
     g.additive = true;
-    g.circleGrad(c.x + x.normal.x * 24, c.y + x.normal.y * 24, 90 * open, withAlpha(tint, 70 / 255), withAlpha(tint, 0));
+    g.circleGrad(c.x + x.normal.x * 24, c.y + x.normal.y * 24, 90 * open * (1 + 0.4 * zap), withAlpha(tint, (70 + 120 * zap) / 255), withAlpha(tint, 0));
     g.additive = false;
 
     const eyeU = ((eye.x - c.x) * x.up.x + (eye.y - c.y) * x.up.y) * K.Px;
@@ -718,7 +735,7 @@ export class Renderer {
         const r = Math.sqrt(e);
         // fish-eye lens + swirl that grows toward the rim
         const lens = mixf(0.8, 1.2, r * r);
-        const sw = r * r * 0.7 * Math.sin(t * 2.2 + r * 9) * opened;
+        const sw = r * r * (0.7 + 2.2 * zap) * Math.sin(t * (2.2 + 9 * zap) + r * 9) * opened;
         let qx = nu * lens, qy = nv * lens;
         const cs = Math.cos(sw), sn = Math.sin(sw);
         const qx2 = qx * cs - qy * sn, qy2 = qx * sn + qy * cs;
@@ -731,7 +748,7 @@ export class Renderer {
         let cr = src[si] / 255, cg = src[si + 1] / 255, cb = src[si + 2] / 255;
         let k = 0.04 + 0.35 * smoothstep(0.6, 1.0, r);
         cr = mixf(cr, dr, k); cg = mixf(cg, dg, k); cb = mixf(cb, db, k);
-        cr = cr * 1.18 + tr * 0.05; cg = cg * 1.18 + tg * 0.05; cb = cb * 1.18 + tb * 0.05;
+        cr = cr * (1.18 + 0.5 * zap) + tr * (0.05 + 0.3 * zap); cg = cg * (1.18 + 0.5 * zap) + tg * (0.05 + 0.3 * zap); cb = cb * (1.18 + 0.5 * zap) + tb * (0.05 + 0.3 * zap);
         const shine = nu * 0.6 - nv * 0.8;
         if (r > 0.5 && r < 0.62 && shine > 0.3) { cr = mixf(cr, 1, 0.25); cg = mixf(cg, 1, 0.25); cb = mixf(cb, 1, 0.25); }
         const ripple = Math.sin(r * 24 - t * 5);
@@ -741,7 +758,7 @@ export class Renderer {
         const spark = Math.sin(ang * 3 - t * 5) >= 0.9;
         if (r > 0.78 && r <= 0.86 && checker > 0.5) { cr = mixf(cr, tr, 0.75); cg = mixf(cg, tg, 0.75); cb = mixf(cb, tb, 0.75); }
         if (r > 0.86) { cr = mixf(dr, tr, 0.55); cg = mixf(dg, tg, 0.55); cb = mixf(db, tb, 0.55); }
-        if (r > 0.88 && r < 0.95) { cr = tr; cg = tg; cb = tb; }
+        if (r > 0.88 && r < 0.95) { cr = mixf(tr, 1, 0.7 * zap); cg = mixf(tg, 1, 0.7 * zap); cb = mixf(tb, 1, 0.7 * zap); }
         if (r > 0.86 && spark) { cr = mixf(tr, 1, 0.8); cg = mixf(tg, 1, 0.8); cb = mixf(tb, 1, 0.8); }
         const o = ((py - by0) * bw + (px - bx0)) * 4;
         od[o] = clamp(cr, 0, 1) * 255; od[o + 1] = clamp(cg, 0, 1) * 255; od[o + 2] = clamp(cb, 0, 1) * 255; od[o + 3] = 255;
@@ -753,12 +770,14 @@ export class Renderer {
       ctx.drawImage(this.lensCanvas, 0, 0, bw, bh, bx0, by0, bw, bh);
     }
 
+    this.drawPortalFx(x);
+
     // sparkles drifting out of the lens
     g.additive = true;
     for (let k = 0; k < 5; k++) {
       const tt = (t * 0.7 + k * 0.2) % 1;
       const side = hash(k, Math.trunc(t * 0.7 + k * 0.2), 3) * 2 - 1;
-      const d = rbW + tt * 40;
+      const d = rbW + tt * (40 + 30 * zap);
       const pt = snapV(V(c.x + up.x * side * raW * 0.8 + nrm.x * d, c.y + up.y * side * raW * 0.8 + nrm.y * d));
       g.rect(Math.trunc(pt.x), Math.trunc(pt.y), 2, 2, withAlpha(tint, 1 - tt));
     }
@@ -786,21 +805,71 @@ export class Renderer {
     const g = this.gfx;
     const ci = p.color, li = linked ? 1 : 0;
     const frame = Math.trunc(this.time * 10 + ci * 3) % PORTAL_FRAMES;
-    const open = easeOutBack(p.open);
+    const closing = p.closeT > 0;
+    const open = closing ? (1 - p.closeT) * (1 - p.closeT) : easeOutBack(clamp01(p.open * 1.5));
+    const thick = closing ? open : easeOutBack(clamp01((p.open - 0.2) / 0.8));
+    const zap = clamp01(p.pulse || 0);
     const col = ci === 0 ? PP.BlueRamp[2] : PP.OrangeRamp[2];
+    if (open <= 0.01) return;
 
     g.additive = true;
-    g.circleGrad(p.center.x + p.normal.x * 20, p.center.y + p.normal.y * 20, 70 * open, withAlpha(col, 60 / 255), withAlpha(col, 0));
+    g.circleGrad(p.center.x + p.normal.x * 20, p.center.y + p.normal.y * 20, 70 * open * (1 + 0.4 * zap), withAlpha(col, (60 + 110 * zap) / 255), withAlpha(col, 0));
     g.additive = false;
 
     const c = snapV(p.center);
+    const th = Math.max(4, snap(24 * thick));
     if (p.isWall) {
       const hgt = 80 * open;
-      g.tex(Sprites.portalVTex[ci][li], frame * 12, 0, 12, 40, c.x - 12, c.y - snap(hgt / 2), 24, snap(hgt));
+      g.tex(Sprites.portalVTex[ci][li], frame * 12, 0, 12, 40, c.x - th / 2, c.y - snap(hgt / 2), th, snap(hgt));
     } else {
       const wid = 80 * open;
-      g.tex(Sprites.portalHTex[ci][li], frame * 40, 0, 40, 12, c.x - snap(wid / 2), c.y - 12, snap(wid), 24);
+      g.tex(Sprites.portalHTex[ci][li], frame * 40, 0, 40, 12, c.x - snap(wid / 2), c.y - th / 2, snap(wid), th);
     }
+    if (zap > 0.05) {
+      g.additive = true;
+      if (p.isWall) g.tex(Sprites.portalVTex[ci][li], frame * 12, 0, 12, 40, c.x - th / 2, c.y - snap(80 * open / 2), th, snap(80 * open), zap * 0.8);
+      else g.tex(Sprites.portalHTex[ci][li], frame * 40, 0, 40, 12, c.x - snap(80 * open / 2), c.y - th / 2, snap(80 * open), th, zap * 0.8);
+      g.additive = false;
+    }
+    if (!closing) this.drawPortalFx(p);
+    else this.drawPortalSpark(p, open);
+  }
+
+  /** Arcs of light that expand away from a portal: once when it opens, and again each time something passes through. */
+  drawPortalFx(p) {
+    const age = p.age, zap = clamp01(p.pulse || 0);
+    if (age < 0.7) this.drawPortalRing(p, age / 0.7, 1);
+    if (zap > 0.02) this.drawPortalRing(p, 1 - zap, 0.9);
+    if (zap > 0.02 && zap < 0.8) this.drawPortalRing(p, 0.8 - zap, 0.6);
+  }
+
+  drawPortalRing(p, r, strength) {
+    if (r < 0 || r >= 1) return;
+    const g = this.gfx;
+    const col = mix(p.color === PortalColor.Blue ? PP.BlueRamp[2] : PP.OrangeRamp[2], C(255, 255, 255), 0.5 * (1 - r));
+    const a = Math.pow(1 - r, 1.6) * strength;
+    const ra = 36 * (0.45 + r * 1.05), rb = 26 * (0.2 + r * 1.2), lift = 4 + r * 26;
+    g.additive = true;
+    for (let k = 0; k <= 36; k++) {
+      const ang = Math.PI * k / 36;
+      const along = Math.cos(ang) * ra, out = Math.sin(ang) * rb + lift;
+      const x = p.center.x + p.up.x * along + p.normal.x * out, y = p.center.y + p.up.y * along + p.normal.y * out;
+      g.rect(Math.trunc(snap(x)), Math.trunc(snap(y)), 2, 2, withAlpha(col, a));
+      if (k % 4 === 0) g.circleGrad(x, y, 7, withAlpha(col, a * 0.35), withAlpha(col, 0));
+    }
+    g.additive = false;
+  }
+
+  /** The last flicker of a replaced portal: a few bright specks fall into its centre. */
+  drawPortalSpark(p, open) {
+    const g = this.gfx, col = p.color === PortalColor.Blue ? PP.BlueRamp[3] : PP.OrangeRamp[3];
+    g.additive = true;
+    for (let k = 0; k < 6; k++) {
+      const side = (k / 5 - 0.5) * 2 * 36 * open;
+      const pt = snapV(V(p.center.x + p.up.x * side * (1 - p.closeT) + p.normal.x * (3 + 14 * p.closeT), p.center.y + p.up.y * side * (1 - p.closeT) + p.normal.y * (3 + 14 * p.closeT)));
+      g.rect(Math.trunc(pt.x), Math.trunc(pt.y), 2, 2, withAlpha(col, 1 - p.closeT));
+    }
+    g.additive = false;
   }
 
   drawAimPreview(w, p) {
