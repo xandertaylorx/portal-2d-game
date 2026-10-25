@@ -12,10 +12,11 @@ import { Input } from './input.js';
 import { SaveData, CustomMap, CustomMaps } from './maps.js';
 import { MapEditor } from './editor.js';
 import { GhostRecorder, GhostPlayback, SolutionGhost } from './ghost.js';
+import { Fight, ARENA_W, ARENA_H } from './fight.js';
 import { MapLibrary } from './library.js';
 import { pickRandomTest } from './random.js';
 
-export const VERSION = '2.15.0';
+export const VERSION = '2.16.0';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 
@@ -59,6 +60,7 @@ export class App {
     this.rec = new GhostRecorder(); this.bestGhost = null; this.solution = null; this.showSolution = false; this.usedSolution = false; this.medal = 0;
     this.pars = null; this.solutions = null;
     fetch('data/pars.json').then((r) => r.json()).then((j) => { this.pars = j; }).catch(() => {});
+    this.recording = false; this.recLog = []; this.rec60 = 0;   // F8: record a run as a solution (see CLAUDE.md)
     this.hitstop = 0;   // freeze-frame: seconds of sim to skip after a heavy impact
 
     this.paused = false; this.showIntro = false;
@@ -111,7 +113,82 @@ export class App {
     this.fadeDir = 1;
   }
 
-  setScreen(s) { this.screen = s; this.stateT = 0; this.paused = false; }
+  setScreen(s) {
+    if (this.screen === 'fight' && s !== 'fight') this.leaveFight();
+    this.screen = s; this.stateT = 0; this.paused = false;
+  }
+
+  // ================================================================ fight mode
+
+  startFight() {
+    this.go(() => {
+      this.fight?.dispose();
+      this.fight = new Fight(this.save, {
+        event: (e) => {
+          this.audio.play(e.sound, e.pos, this.camPos, e.pitch);
+          if (this.save.shake) { this.shake = Math.max(this.shake, e.shake); if (e.freeze) this.fight.freeze = Math.max(this.fight.freeze || 0, e.freeze); }
+        },
+        shake: (n) => { if (this.save.shake) this.shake = Math.max(this.shake, n); },
+      });
+      this.renderer.overlay = (g, w) => this.fight?.drawOverlay(g, w);
+      this.setScreen('fight');
+      this.camPos = V(ARENA_W * K.Tile / 2, ARENA_H * K.Tile / 2);
+    });
+  }
+
+  leaveFight() {
+    this.fight?.dispose();
+    this.renderer.overlay = null; this.renderer.extraLights = [];
+  }
+
+  updateFight(dt) {
+    const f = this.fight;
+    if (Input.pressed('Escape') && f.phase !== 'matchEnd') { this.paused = !this.paused; this.audio.click(); }
+    this.camPos = V(ARENA_W * K.Tile / 2, ARENA_H * K.Tile / 2);
+    if (!this.paused) {
+      const inp = this.readInput();
+      inp.fireBolt = Input.down('KeyQ') || Input.down('ShiftLeft') || Input.down('ShiftRight');
+      f.update(dt, inp);
+      this.renderer.extraLights = f.lights();
+      this.audioScene(f.world);
+    } else this.audio.setScene({ laser: 0, portal: 0, speed: 0 });
+    if (f.phase === 'matchEnd' && (Input.pressed('Enter') || Input.pressed('NumpadEnter'))) this.startFight();
+    this.updateCam(dt, K.Px);
+  }
+
+  drawFight() {
+    const f = this.fight, g = this.g;
+    f.drawHud(g, UI, Align);
+    if (f.phase === 'matchEnd') this.drawFightEnd();
+    else if (this.paused) this.drawFightPause();
+    else this.drawCrosshair();
+  }
+
+  drawFightPause() {
+    const g = this.g;
+    g.rect(0, 0, K.ScreenW, K.ScreenH, C(6, 8, 12, 170));
+    const r = R(K.ScreenW / 2 - 230, K.ScreenH / 2 - 150, 460, 300);
+    UI.panel(r);
+    UI.textShadow('PAUSED', V(K.ScreenW / 2, r.y + 50), 46, PP.CreamHi, Align.Center);
+    const x = r.x + 36, bw = r.w - 72;
+    if (UI.button('f_resume', R(x, r.y + 100, bw, 56), 'RESUME', { accent: PP.OrangeRamp[2] })) this.paused = false;
+    if (UI.button('f_menu', R(x, r.y + 168, bw, 56), 'MAIN MENU')) this.go(() => this.setScreen('menu'));
+  }
+
+  drawFightEnd() {
+    const f = this.fight, g = this.g, a = clamp01(f.phaseT * 3);
+    g.rect(0, 0, K.ScreenW, K.ScreenH, C(6, 8, 12, 170 * a));
+    const r = R(K.ScreenW / 2 - 290, K.ScreenH / 2 - 200, 580, 400);
+    const win = f.matchWon;
+    UI.panel(r, a, win ? PP.Exit : C(220, 50, 70));
+    UI.textShadow(win ? 'VICTORY' : 'DEFEATED', V(K.ScreenW / 2, r.y + 70), 72, withAlpha(win ? PP.Exit : C(255, 90, 80), a), Align.Center);
+    UI.text(win ? 'YOUR EVIL TWIN WANTS A REMATCH. IT HAS LEARNED.' : 'YOUR EVIL TWIN WALKS AWAY.', V(K.ScreenW / 2, r.y + 130), 16, withAlpha(DIM, a), Align.Center);
+    UI.text(`ROUNDS ${f.wins} - ${f.losses}`, V(K.ScreenW / 2, r.y + 176), 30, withAlpha(PP.CreamHi, a), Align.Center);
+    UI.text(`WIN STREAK ${f.streak}   BEST ${this.save.fightBest}   TOTAL WINS ${this.save.fightWins}`, V(K.ScreenW / 2, r.y + 220), 16, withAlpha(PP.Cream, a), Align.Center);
+    if (UI.button('f_again', R(r.x + 36, r.y + 280, 240, 60), win ? 'NEXT FIGHT' : 'REMATCH', { accent: PP.OrangeRamp[2] })) this.startFight();
+    if (UI.button('f_quit', R(r.x + 304, r.y + 280, 240, 60), 'MAIN MENU')) this.go(() => this.setScreen('menu'));
+  }
+
 
   showToast(s) { this.toast = s; this.toastT = 3.5; }
 
@@ -174,7 +251,7 @@ export class App {
 
   update(dt) {
     const playing = (this.screen === 'play' || this.screen === 'complete') && this.world != null;
-    const wantHidden = this.screen === 'play' && !this.paused && this.world?.player && !this.world.player.dead;
+    const wantHidden = (this.screen === 'play' && !this.paused && this.world?.player && !this.world.player.dead) || (this.screen === 'fight' && !this.paused && this.fight?.phase !== 'matchEnd');
     if (!!wantHidden !== this.cursorHidden) {
       this.canvas.style.cursor = wantHidden ? 'none' : 'default';
       this.cursorHidden = !!wantHidden;
@@ -188,6 +265,8 @@ export class App {
       if (this.editor.wantTest) { this.editor.wantTest = false; const tm = this.editor.map; this.go(() => this.playCustom(tm, true)); }
       return;
     }
+
+    if (this.screen === 'fight' && this.fight) { this.updateFight(dt); return; }
 
     if (!playing) {
       this.step(this.menuWorld, dt, emptyInput(), true);
@@ -210,6 +289,11 @@ export class App {
         // once the player gets going, let the hints get out of the way
         const hp = w.player;
         if (hp && this.hintT > 4 && this.hintEnd > this.hintT + 1.2 && Math.hypot(hp.pos.x - this.startPos.x, hp.pos.y - this.startPos.y) > 220) this.hintEnd = this.hintT + 1.2;
+        if (Input.pressed('F8') && !this.customMode) {
+          this.recording = !this.recording;
+          this.showToast(this.recording ? 'RECORDING A SOLUTION - FINISH THE CHAMBER (F8 STOPS)' : 'RECORDING OFF');
+          this.go(() => this.loadLevel(false));
+        }
         if (Input.pressed('KeyG') && this.bestGhost) { this.save.ghostOn = !this.save.ghostOn; this.save.store(); this.showToast(this.save.ghostOn ? 'BEST-RUN GHOST ON' : 'BEST-RUN GHOST OFF'); }
         this.step(w, dt, this.readInput(), false);
         if (this.solution && w.player && !w.player.dead && !w.player.won) this.solution.advance(dt);
@@ -261,6 +345,7 @@ export class App {
 
   step(w, dt, input, silent) {
     if (this.hitstop > 0) { this.hitstop -= dt; if (!silent) this.audioScene(w); return; }
+    if (this.recording && !silent) { this.stepRecorded(w, dt, input); return; }
     this.accumulator += dt;
     // one-frame presses are latched until a sim step consumes them, so frames that run no step don't swallow a jump
     const pd = this.pend;
@@ -284,6 +369,38 @@ export class App {
     if (!silent) this.audioScene(w);
   }
 
+  /** While recording (F8) the sim runs in exact 60 fps frames, the same way the replay test and bot do, and every
+   *  frame's input is logged. Finishing the chamber copies the result as a solution. */
+  stepRecorded(w, dt, input) {
+    const pd = this.pend;
+    pd.jump ||= input.jumpPressed; pd.use ||= input.usePressed; pd.blue ||= input.fireBlue; pd.orange ||= input.fireOrange; pd.cycle ||= input.fireCycle;
+    this.rec60 += dt;
+    let guard = 0;
+    while (this.rec60 >= 1 / 60 && guard++ < 4) {
+      this.rec60 -= 1 / 60;
+      const i1 = { ...input, jumpPressed: pd.jump, usePressed: pd.use, fireBlue: pd.blue, fireOrange: pd.orange, fireCycle: pd.cycle };
+      pd.jump = pd.use = pd.blue = pd.orange = pd.cycle = false;
+      const p = w.player;
+      if (p && !p.dead && !p.won) {
+        const bits = (i1.jumpPressed ? 1 : 0) | (i1.jumpHeld ? 2 : 0) | (i1.usePressed ? 4 : 0) | (i1.fireBlue ? 8 : 0) | (i1.fireOrange ? 16 : 0) | (i1.fireCycle ? 32 : 0);
+        this.recLog.push(`${i1.moveX},${bits},${input.aimWorld.x},${input.aimWorld.y}`);
+      }
+      w.update(K.SimDt, i1);
+      w.update(K.SimDt, { ...i1, jumpPressed: false, usePressed: false, fireBlue: false, fireOrange: false, fireCycle: false });
+      if (w.player && !w.player.won) this.rec.step(w.player);
+    }
+    for (const e of w.events) { this.audio.play(e.sound, e.pos, this.camPos, e.pitch); if (this.save.shake) this.shake = Math.max(this.shake, e.shake); }
+    w.events.length = 0;
+    this.audioScene(w);
+  }
+
+  /** The recorded run as the "move,flags,ax,ay xN;" string that tests and ghosts use. */
+  recordedSolution() {
+    const out = [], L = this.recLog;
+    for (let i = 0; i < L.length;) { let j = i; while (j < L.length && L[j] === L[i]) j++; out.push(`${L[i]}x${j - i};`); i = j; }
+    return out.join('');
+  }
+
   /** Feeds the reactive audio layers: beam hum near lasers, portal hum near portals, wind with speed. */
   audioScene(w) {
     const p = w.player;
@@ -305,9 +422,11 @@ export class App {
 
   followPlayer(dt, snap) {
     const w = this.world, p = w.player;
-    const target = p ? V(p.pos.x, p.pos.y - 24) : V(w.widthPx / 2, w.heightPx / 2);
+    // while the solution ghost is walking the route, the camera follows it instead of you
+    const sg = this.solution && this.screen === 'play' && !this.solution.done ? this.solution.pose : null;
+    const target = sg ? V(sg.pos.x, sg.pos.y - 24) : p ? V(p.pos.x, p.pos.y - 24) : V(w.widthPx / 2, w.heightPx / 2);
     // lead the camera toward where the player is heading: sideways with run speed, downward when falling fast
-    if (p && !p.dead && !p.won) {
+    if (!sg && p && !p.dead && !p.won) {
       this.lead = V(lerp(this.lead?.x ?? 0, clamp(p.vel.x * 0.2, -110, 110), snap ? 1 : 1 - Math.exp(-dt * 3)), lerp(this.lead?.y ?? 0, p.vel.y > 500 ? clamp((p.vel.y - 500) * 0.14, 0, 110) : p.vel.y < -500 ? clamp((p.vel.y + 500) * 0.1, -70, 0) : 0, snap ? 1 : 1 - Math.exp(-dt * 3)));
       target.x += this.lead.x; target.y += this.lead.y;
     }
@@ -347,7 +466,13 @@ export class App {
   async ensureRandomPools() {
     if (this.randomPools) return;
     const res = await fetch('data/random.json');
-    this.randomPools = (await res.json()).pools.map((pool) => pool.map(makeDef));
+    const pools = (await res.json()).pools.map((pool) => pool.map(makeDef));
+    // the web-built tests (turrets, lifts, gel, longer chains) are mixed into every difficulty tier
+    try {
+      const more = (await (await fetch('data/random2.json')).json()).pools;
+      more.forEach((pool, i) => { if (pools[i]) pools[i].push(...pool.map(makeDef)); });
+    } catch (e) { console.warn('extra random tests unavailable', e); }
+    this.randomPools = pools;
   }
 
   pickRandom() {
@@ -381,6 +506,7 @@ export class App {
     this.paused = false;
     this.accumulator = 0;
     this.rec.reset();
+    this.recLog = []; this.rec60 = 0;
     this.setupGhosts(fresh);
     this.hitstop = 0;
     this.lead = V(0, 0);
@@ -392,15 +518,22 @@ export class App {
   setupGhosts(fresh) {
     if (fresh) { this.showSolution = false; this.usedSolution = false; }
     this.bestGhost = null; this.solution = null;
-    if (this.randomMode || this.customMode) return;
+    if (this.customMode) return;
     const name = this.world.def.name, rec = this.save.ghosts[name];
-    if (typeof rec === 'string') { try { this.bestGhost = new GhostPlayback(rec); } catch { this.bestGhost = null; } }
-    if (this.showSolution && this.solutions?.[name]) this.solution = new SolutionGhost(this.currentDef, this.solutions[name]);
+    if (!this.randomMode && typeof rec === 'string') { try { this.bestGhost = new GhostPlayback(rec); } catch { this.bestGhost = null; } }
+    const sol = this.solutionFor();
+    if (this.showSolution && sol) this.solution = new SolutionGhost(this.currentDef, sol);
+  }
+
+  /** The reference solution for the chamber being played: built into web chambers, or from solutions.json. */
+  solutionFor() {
+    const def = this.currentDef;
+    return def.solution || (!this.randomMode && !this.customMode ? this.solutions?.[def.name] : null) || null;
   }
 
   async toggleSolution() {
     if (this.showSolution) { this.showSolution = false; this.solution = null; this.paused = false; return; }
-    if (!this.solutions) {
+    if (!this.solutions && !this.currentDef.solution) {
       try { this.solutions = await (await fetch('data/solutions.json')).json(); } catch { this.showToast('COULD NOT LOAD THE SOLUTION'); return; }
     }
     this.showSolution = true; this.usedSolution = true; this.paused = false;
@@ -410,8 +543,15 @@ export class App {
 
   completeLevel() {
     const s = this.save;
+    if (this.recording && this.recLog.length && !this.usedSolution) {
+      const text = JSON.stringify({ name: this.world.def.name, solution: this.recordedSolution(), frames: this.recLog.length });
+      try { navigator.clipboard?.writeText(text); } catch { /* clipboard is optional */ }
+      console.log('SOLUTION', text);
+      window.lastSolution = text;
+      this.showToast('SOLUTION COPIED - SEE CLAUDE.MD TO ADD IT');
+    }
     if (this.randomMode) {
-      this.streak++;
+      if (!this.usedSolution) this.streak++;
       s.randomCleared++;
       s.randomBestStreak = Math.max(s.randomBestStreak, this.streak);
       this.newBest = false;
@@ -429,7 +569,7 @@ export class App {
         const enc = this.usedSolution ? null : this.rec.encode();
         if (enc) s.ghosts[name] = enc;
       }
-      const par = this.pars?.[name];
+      const par = this.world.def.par || this.pars?.[name];
       this.medal = par && !this.usedSolution ? (this.levelTime <= par ? 3 : this.levelTime <= par * 1.5 ? 2 : 1) : 0;
       if (this.medal > (s.medals[name] || 0)) s.medals[name] = this.medal;
     }
@@ -466,7 +606,8 @@ export class App {
   draw() {
     const g = this.g;
     const playing = (this.screen === 'play' || this.screen === 'complete') && this.world != null;
-    const shown = playing ? this.world : this.screen === 'editor' && this.editor ? this.editor.world : this.menuWorld;
+    const inFight = this.screen === 'fight' && this.fight;
+    const shown = inFight ? this.fight.world : playing ? this.world : this.screen === 'editor' && this.editor ? this.editor.world : this.menuWorld;
     const p = shown.player;
     const eye = this.screen === 'editor' ? this.camPos : p && !p.dead
       ? V(p.pos.x, p.pos.y - 10)
@@ -475,7 +616,7 @@ export class App {
     g.setTarget(this.canvas);
     const gh = [];
     if (this.screen === 'play' && shown === this.world) {
-      if (this.solution) gh.push({ p: this.solution.pose, kind: 'sol' });
+      if (this.solution) gh.push({ p: this.solution.pose, kind: 'sol', world: this.solution.world });
       else if (this.save.ghostOn && this.bestGhost && this.levelTime < this.bestGhost.duration + 1.5) { const pose = this.bestGhost.at(this.levelTime); if (pose) gh.push({ p: pose, kind: 'best' }); }
     }
     this.renderer.ghosts = gh;
@@ -483,6 +624,7 @@ export class App {
     g.clear(PP.Ink);
     this.renderer.drawScene(shown, this.cam, eye);
     if (this.screen === 'play' && !this.paused && this.world?.player) this.renderer.drawAimPreview(this.world, this.world.player);
+    if (inFight && !this.paused && this.fight.phase === 'fight' && shown.player && !shown.player.dead) this.renderer.drawAimPreview(shown, shown.player);
     if (this.screen === 'editor') this.editor?.drawOverlay();
 
     g.identity();
@@ -498,6 +640,7 @@ export class App {
         if (this.paused) this.drawPause(); else this.drawCrosshair();
         break;
       case 'complete': this.drawHud(); this.drawComplete(); break;
+      case 'fight': this.drawFight(); break;
       case 'ending': this.drawEnding(); break;
       case 'mymaps': this.drawMyMaps(); break;
       case 'editor': this.editor?.drawUi(); break;
@@ -560,6 +703,9 @@ export class App {
     y += h + gap;
     const rsub = s.randomBestStreak > 0 ? `BEST STREAK ${s.randomBestStreak}` : 'ENDLESS GENERATED CHAMBERS';
     if (UI.button('random', R(x, y, bw, h), 'RANDOM TEST', { accent: PP.Exit, sub: rsub })) this.startRandom(true);
+    y += h + gap;
+    const fsub = s.fightWins > 0 ? `${s.fightWins} WINS   BEST STREAK ${s.fightBest}` : 'DUEL YOUR EVIL TWIN';
+    if (UI.button('fight', R(x, y, bw, h), 'FIGHT', { accent: C(255, 90, 100), sub: fsub })) this.startFight();
     y += h + gap;
     const msub = this.library.maps.length > 0 ? `${this.library.maps.length} SAVED` : 'BUILD YOUR OWN CHAMBERS';
     if (UI.button('builder', R(x, y, bw, h), 'MAP BUILDER', { accent: PP.BlueRamp[3], sub: msub })) this.go(() => this.openMyMaps());
@@ -811,6 +957,7 @@ export class App {
   drawHud() {
     const g = this.g, w = this.world, def = w.def;
     const num = this.hudNumber();
+    if (this.recording) UI.text('REC', V(K.ScreenW / 2, 22), 16, C(255, 90, 80, 255 * (0.6 + 0.4 * Math.sin(this.time * 6))), Align.Center);
     const label = this.customMode ? (this.fromEditor ? 'MAP TEST' : 'CUSTOM MAP') : this.randomMode ? `RANDOM TEST  SEED ${this.randomSeed}` : 'TEST CHAMBER';
     const name = this.customMode ? def.name.toUpperCase() : this.randomMode ? 'STREAK' : def.name.toUpperCase();
     const numM = UI.measure(num, 46);
@@ -932,7 +1079,7 @@ export class App {
   drawPause() {
     const g = this.g;
     g.rect(0, 0, K.ScreenW, K.ScreenH, C(6, 8, 12, 170));
-    const camp = !this.customMode && !this.randomMode, hh = 428 + (camp ? 68 : 0);
+    const camp = !this.customMode && (!this.randomMode || !!this.currentDef.solution), hh = 428 + (camp ? 68 : 0);
     const r = R(K.ScreenW / 2 - 230, K.ScreenH / 2 - hh / 2, 460, hh);
     UI.panel(r);
     UI.textShadow('PAUSED', V(K.ScreenW / 2, r.y + 50), 46, PP.CreamHi, Align.Center);
@@ -981,8 +1128,8 @@ export class App {
     if (this.randomMode) row('STREAK', String(this.streak), PP.Exit, this.streak >= s.randomBestStreak && this.streak > 1 ? 'RECORD' : null);
     else if (this.customMode) row('BEST', UI.formatTime(this.customMap.best), PP.Cream);
     else row('BEST', UI.formatTime(s.best[this.level]), PP.Cream);
-    if (camp && this.pars?.[w.def.name]) {
-      const par = this.pars[w.def.name];
+    if (camp && !this.randomMode && (w.def.par || this.pars?.[w.def.name])) {
+      const par = w.def.par || this.pars[w.def.name];
       row('PAR', UI.formatTime(par), this.medal === 3 ? PP.Hazard : PP.Cream, this.usedSolution ? 'ASSISTED' : ['', 'BRONZE', 'SILVER', 'GOLD'][this.medal]);
     }
     row('PORTALS PLACED', String(w.portalsPlaced), PP.Cream);

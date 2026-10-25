@@ -38,6 +38,7 @@ export class Renderer {
     this.lightSmall = makeCanvas(K.CanvasW / 4, K.CanvasH / 4);    // quarter-res copy: the smooth upscale blurs every shadow and glow edge
     this.lights = [];
     this.occluders = [];
+    this.overlay = null; this.extraLights = [];   // hooks for fight mode
     this.ghosts = [];   // {p, kind}: translucent players drawn for the best-run and solution ghosts
   }
 
@@ -128,6 +129,7 @@ export class Renderer {
     for (const b of w.buttons) this.drawButton(b);
     for (const c of w.cubes) this.drawWithClones(w, c, () => this.drawCube(c));
     if (w.player) this.drawWithClones(w, w.player, () => this.drawPlayer(w.player));
+    for (const e of w.extra) this.drawWithClones(w, e, () => this.drawPlayer(e, Sprites.enemyTex));
     for (const gh of this.ghosts) this.drawGhost(gh);
     this.drawLayer(a.frontTex, w, view);
 
@@ -152,7 +154,9 @@ export class Renderer {
     for (const r of w.receivers) this.drawReceiverGlow(r);
     for (const e of w.emitters) this.drawEmitterGlow(e);
     this.drawLasers(w);
+    for (const gh of this.ghosts) this.drawGhostProps(gh);
     this.drawParticles(w);
+    this.overlay?.(this.gfx, w);   // fight mode draws bolts, pickups and shields here
     for (const f of w.fading) this.drawPortal(f, w.linked);
     if (drawPortals) for (const p of w.portals) if (p) this.drawPortal(p, w.linked);
   }
@@ -531,7 +535,18 @@ export class Renderer {
     g.additive = false;
   }
 
-  drawPlayer(p) {
+  /** The solution ghost's own portals and cubes, drawn over the scene so you can see what it is doing. */
+  drawGhostProps(gh) {
+    const gw = gh.world, g = this.gfx;
+    if (!gw) return;
+    g.opacity = 0.6;
+    for (const q of gw.portals) if (q) this.drawPortal(q, gw.linked);
+    g.opacity = 0.5;
+    for (const c of gw.cubes) this.drawCube(c);
+    g.opacity = 1;
+  }
+
+  drawPlayer(p, tex = Sprites.playerTex) {
     if (p.dead) return;
     const g = this.gfx;
     let frame;
@@ -552,10 +567,10 @@ export class Renderer {
       g.push();
       g.mult([sx, 0, 0, sy, cx * (1 - sx), cy * (1 - sy)]);
     }
-    g.tex(Sprites.playerTex, frame * 16, 0, sw, PLAYER_H, dx, dy, 32, PLAYER_H * 2);
+    g.tex(tex, frame * 16, 0, sw, PLAYER_H, dx, dy, 32, PLAYER_H * 2);
     if (p.teleportFlash > 0.05) {
       g.additive = true;
-      g.tex(Sprites.playerTex, frame * 16, 0, sw, PLAYER_H, dx, dy, 32, PLAYER_H * 2, 180 / 255 * p.teleportFlash);
+      g.tex(tex, frame * 16, 0, sw, PLAYER_H, dx, dy, 32, PLAYER_H * 2, 180 / 255 * p.teleportFlash);
       g.additive = false;
     }
 
@@ -687,6 +702,7 @@ export class Renderer {
     this.lights.length = 0;
     this.occluders.length = 0;
     for (const c of w.cubes) if (!c.gone && !c.dissolving) { const r = c.rect; this.occluders.push({ x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }); }
+    for (const e of w.extra) if (!e.dead) { const r = e.rect; this.occluders.push({ x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }); }
     const pl = w.player;
     if (pl && !pl.dead) { const r = pl.rect; this.occluders.push({ x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }); }
 
@@ -739,6 +755,7 @@ export class Renderer {
       if (c.gone || glow < 0.05) continue;
       this.castLight(w, c.pos.x, c.pos.y, 120, withAlpha(c.held ? PP.BlueRamp[2] : PP.OrangeRamp[2], 0.7 * glow), view);
     }
+    for (const l of this.extraLights) this.castLight(w, l.x, l.y, l.r, l.col, view);
     if (pl && !pl.dead) {
       // a faint glow around the player so they are never lost in the dark, plus the gun's muzzle light
       this.castLight(w, pl.pos.x, pl.pos.y - 6, 150, C(190, 205, 255, 70), view);
@@ -939,6 +956,7 @@ export class Renderer {
     const any = (w.player && !w.player.dead && overlaps(w.player.rect, lensRect)) || w.cubes.some((cb) => !cb.gone && overlaps(cb.rect, lensRect));
     if (!any) return;
     g.clip(sx, sy, sw, sh);
+    for (const e of w.extra) this.drawWithClones(w, e, () => this.drawPlayer(e, Sprites.enemyTex));
     for (const cb of w.cubes) {
       this.drawWithClones(w, cb, () => this.drawCube(cb));
       const glow = Math.max(cb.held ? 1 : 0, cb.onButtonGlow, cb.teleportFlash);

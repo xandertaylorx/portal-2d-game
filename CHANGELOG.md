@@ -2,6 +2,21 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.16.0] - 2026-10-25
+
+### Added
+- **Fight mode.** Duel your evil twin in randomly generated arenas, first to three rounds. Use your portals against it and the
+  arena: fire energy bolts (Q) that fly through portals and bounce off mirror cubes, stomp on its head, fling cubes at it, and
+  knock it into goo or into a sentry's sights. Grab health, rapid-fire and shield pickups. Each round can change the rules (low gravity,
+  ricochet bolts, sudden death), and the twin gets smarter every match you win, even opening portals to ambush you.
+- **20 new chambers (101-120)** built around sentry turrets, lift beams and blue gel, ramping up to a chamber that uses everything.
+- **Far more varied random tests.** Hundreds of new tests chain two to six challenges (pits, vaults, button doors, lifts, gel, sentries
+  and more) and are mixed into every difficulty. Each one has a built-in solution, so Watch Solution works in random tests too.
+- Press **F8** in a chamber to record your own run as a solution.
+
+### Fixed
+- Watch Solution's camera now follows the ghost instead of staying on you, and the ghost's portals and cubes are visible.
+
 ## [2.15.0] - 2026-10-25
 
 ### Added

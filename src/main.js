@@ -29,6 +29,8 @@ async function boot() {
     status.textContent = 'Could not load the game data. If you opened this file directly, serve the folder over http instead.';
     return;
   }
+  // web-only chambers (with built-in solutions) follow the exported ones
+  try { levels.chambers = levels.chambers.concat((await (await fetch('data/bonus.json')).json()).chambers); } catch (e) { console.warn('bonus chambers unavailable', e); }
   const app = new App(canvas, { levels });
   window.portal2d = app;
   Input.attach(canvas);

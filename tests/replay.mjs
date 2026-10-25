@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { World, makeDef, stepFrame } from '../src/world.js';
+import { replay } from '../tools/bot.mjs';
 
 const here = new URL('.', import.meta.url);
 const levels = JSON.parse(readFileSync(new URL('../data/levels.json', here)));
@@ -53,4 +54,19 @@ for (const t of traces) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${t.name.padEnd(22)} frames ${frames}/${t.trace.frames}${w.player.dead ? ' (died)' : ''}`);
 }
 console.log(bad ? `${bad} chamber(s) differ from the C# game` : `all ${traces.length} replays match the C# game`);
+
+// Web-built chambers and random tests carry their own solution: every one must exist and win (see CLAUDE.md).
+let missing = 0, total = 0;
+const checkOwn = (label, defs) => {
+  for (const d of defs) {
+    total++;
+    if (!d.solution) { missing++; console.log(`NO SOLUTION ${label} ${d.name}`); continue; }
+    const r = replay(d, d.solution);
+    if (!r.won) { missing++; console.log(`FAIL ${label} ${d.name} (${r.dead ? 'died' : 'did not reach the exit'})`); }
+  }
+};
+checkOwn('bonus', JSON.parse(readFileSync(new URL('../data/bonus.json', here))).chambers);
+for (const [i, pool] of JSON.parse(readFileSync(new URL('../data/random2.json', here))).pools.entries()) checkOwn(`random tier ${i + 1}`, pool);
+console.log(missing ? `${missing} web-built level(s) have no working solution` : `all ${total} web-built levels have a working solution`);
+if (missing) bad++;
 process.exit(bad ? 1 : 0);

@@ -9,7 +9,7 @@ export const Sfx = {
   PortalBlue: 'PortalBlue', PortalOrange: 'PortalOrange', PortalFail: 'PortalFail', Jump: 'Jump', Land: 'Land',
   Teleport: 'Teleport', ButtonDown: 'ButtonDown', ButtonUp: 'ButtonUp', DoorOpen: 'DoorOpen', DoorClose: 'DoorClose',
   Pickup: 'Pickup', Drop: 'Drop', Death: 'Death', Win: 'Win', Fizzle: 'Fizzle', CubeDissolve: 'CubeDissolve',
-  CubeSpawn: 'CubeSpawn', ReceiverOn: 'ReceiverOn', TurretSpot: 'TurretSpot', TurretFire: 'TurretFire',
+  CubeSpawn: 'CubeSpawn', ReceiverOn: 'ReceiverOn', TurretSpot: 'TurretSpot', TurretFire: 'TurretFire', Bolt: 'Bolt', Hit: 'Hit',
 };
 
 export const GunMode = { None: 0, BlueOnly: 1, Both: 2 };
@@ -23,6 +23,7 @@ export function makeDef(j) {
     family: j.family || 'sequence', layoutId: j.layoutId || '',
     mechanics: j.mechanics || [j.family || 'sequence'], difficulty: j.difficulty || 0,
     exitGroups: j.exitGroups || [], recordKey: j.recordKey || j.name, tutorial: !!j.tutorial,
+    solution: j.solution || '', par: j.par || 0,
   };
 }
 
@@ -134,6 +135,7 @@ export class World {
     this.cubes = []; this.buttons = []; this.emitters = []; this.receivers = [];
     this.portals = [null, null];
     this.fading = [];   // visual only: replaced portals collapsing away
+    this.extra = []; this.fightHooks = null;   // fight mode: more player-like bodies (the evil twin), and damage callbacks
     this.turrets = []; this.beams = []; this.shots = [];   // sentries, lift/push beams, and the bolts they just fired
     this.doorOpen = new Array(World.Groups).fill(0);
     this.groupActive = new Array(World.Groups).fill(false);
@@ -318,6 +320,7 @@ export class World {
       if (f.closeT >= 1) this.fading.splice(i, 1);
     }
     if (this.player) this.updatePlayer(this.player, dt, input);
+    for (const e of this.extra) this.updatePlayer(e, dt, e.input || emptyInput());
     for (const c of this.cubes) this.updateCube(c, dt);
     this.updateBeams();
     this.updateTurrets(dt);
@@ -325,6 +328,7 @@ export class World {
     this.updateGroups(dt, false);
     this.updateHazards();
     if (this.player && !this.player.dead) this.unstick(this.player);
+    for (const e of this.extra) if (!e.dead) this.unstick(e);
     for (const c of this.cubes) if (c.solid && !c.held) this.unstick(c);
     this.ambientFx(dt);
     this.fx.update(dt);
@@ -655,7 +659,7 @@ export class World {
     this.lasers.length = 0;
     this.laserImpacts.length = 0;
     for (const r of this.receivers) r.active = false;
-    let hitPlayer = false;
+    const hitBodies = new Set();
     const blocks = (x, y) => this.blocksLaser(x, y);
 
     for (const e of this.emitters) {
@@ -671,16 +675,18 @@ export class World {
           const t = rayAabb(origin, dir, c.rect);
           if (t >= 0 && t < dist) { dist = t; kind = 1; hitCube = c; }
         }
-        const pl = this.player;
-        if (pl && !pl.dead && !pl.won) {
-          const r0 = pl.rect;
-          const r = { x: r0.x + 3, y: r0.y + 3, w: r0.w - 6, h: r0.h - 6 };
-          const t = rayAabb(origin, dir, r);
-          if (t >= 0 && t < dist) { dist = t; kind = 2; }
+        let hurt = null;
+        for (const pl of this.extra.length ? [this.player, ...this.extra] : [this.player]) {
+          if (pl && !pl.dead && !pl.won) {
+            const r0 = pl.rect;
+            const r = { x: r0.x + 3, y: r0.y + 3, w: r0.w - 6, h: r0.h - 6 };
+            const t = rayAabb(origin, dir, r);
+            if (t >= 0 && t < dist) { dist = t; kind = 2; hurt = pl; }
+          }
         }
         const end = V(origin.x + dir.x * dist, origin.y + dir.y * dist);
         this.lasers.push({ a: origin, b: end });
-        if (kind === 2) { hitPlayer = true; this.laserImpacts.push(end); break; }
+        if (kind === 2) { hitBodies.add(hurt); this.laserImpacts.push(end); break; }
         if (kind === 1 && hitCube.mirror !== 0) {
           // mirror cube: '/' turns a beam (dx,dy) into (-dy,-dx), '\' into (dy,dx)
           dir = hitCube.mirror > 0 ? V(-dir.y, -dir.x) : V(dir.y, dir.x);
@@ -703,7 +709,7 @@ export class World {
         break;
       }
     }
-    if (hitPlayer && this.player) this.kill(this.player, Palette.LaserRed);
+    for (const b of hitBodies) { if (this.fightHooks) this.fightHooks.laser(b); else this.kill(b, Palette.LaserRed); }
   }
 
   // ---------------------------------------------------------------- sentries and lift beams
@@ -736,19 +742,20 @@ export class World {
   /** Sentries lock on to a visible player, charge, then fire. Walls and cubes break the line of sight. */
   updateTurrets(dt) {
     for (let i = this.shots.length - 1; i >= 0; i--) { this.shots[i].life -= dt; if (this.shots[i].life <= 0) this.shots.splice(i, 1); }
-    const p = this.player;
+    const bodies = this.extra.length ? [this.player, ...this.extra] : [this.player];
     for (const t of this.turrets) {
       t.fire = Math.max(0, t.fire - dt * 5);
       const cx = t.x * T + T / 2, cy = t.y * T + T / 2;
-      let sees = false, dx = 0, dy = 1, dist = 0;
-      if (p && !p.dead && !p.won) {
-        dx = p.pos.x - cx; dy = p.pos.y - 2 - cy; dist = Math.hypot(dx, dy);
-        if (dist > 20 && dist < 560) {
-          const dir = V(dx / dist, dy / dist);
-          const o = V(cx + dir.x * 17, cy + dir.y * 17);
-          sees = !this.castGrid(o, dir, dist - 17, (x, y) => this.isSolid(x, y)).hit;
-          if (sees) for (const c of this.cubes) if (c.solid) { const tt = rayAabb(o, dir, c.rect); if (tt >= 0 && tt < dist - 17) { sees = false; break; } }
-        }
+      let sees = false, dx = 0, dy = 1, p = null, best = Infinity;
+      for (const b of bodies) {
+        if (!b || b.dead || b.won) continue;
+        const bx = b.pos.x - cx, by = b.pos.y - 2 - cy, dist = Math.hypot(bx, by);
+        if (dist <= 20 || dist >= 560 || dist >= best) continue;
+        const dir = V(bx / dist, by / dist);
+        const o = V(cx + dir.x * 17, cy + dir.y * 17);
+        let ok = !this.castGrid(o, dir, dist - 17, (x, y) => this.isSolid(x, y)).hit;
+        if (ok) for (const c of this.cubes) if (c.solid) { const tt = rayAabb(o, dir, c.rect); if (tt >= 0 && tt < dist - 17) { ok = false; break; } }
+        if (ok) { sees = true; p = b; best = dist; dx = bx; dy = by; }
       }
       if (sees) {
         const want = Math.atan2(dy, dx);
@@ -763,7 +770,7 @@ export class World {
           t.fire = 1;
           this.shots.push({ a: V(cx, cy), b: V(p.pos.x, p.pos.y - 2), life: 0.22 });
           this.emit(Sfx.TurretFire, V(cx, cy), 4);
-          this.kill(p, Palette.LaserRed);
+          if (this.fightHooks) this.fightHooks.turret(p, t); else this.kill(p, Palette.LaserRed);
         }
       } else t.charge = t.charge < 0 ? Math.min(0, t.charge + dt) : Math.max(0, t.charge - dt * 1.6);
       t.spot = Math.max(0, t.spot - dt * 4);
@@ -824,14 +831,15 @@ export class World {
   }
 
   updateHazards() {
-    const p = this.player;
-    if (p && !p.dead && !p.won) {
-      const r = p.rect;
-      if (this.touchesTile({ x: r.x + 3, y: r.y, w: r.w - 6, h: r.h - 8 }, '~')) this.kill(p, Palette.Goo);
-      else if (this.touchesTile(r, '|')) {
-        this.clearPlayerPortals();
-        const held = p.holding;
-        if (held) { p.holding = null; held.held = false; this.dissolve(held); }
+    for (const p of this.extra.length ? [this.player, ...this.extra] : [this.player]) {
+      if (p && !p.dead && !p.won) {
+        const r = p.rect;
+        if (this.touchesTile({ x: r.x + 3, y: r.y, w: r.w - 6, h: r.h - 8 }, '~')) this.kill(p, Palette.Goo);
+        else if (this.touchesTile(r, '|')) {
+          this.clearPlayerPortals();
+          const held = p.holding;
+          if (held) { p.holding = null; held.held = false; this.dissolve(held); }
+        }
       }
     }
     for (const c of this.cubes) {

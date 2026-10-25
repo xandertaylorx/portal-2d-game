@@ -19,6 +19,7 @@ export class SaveData {
     this.cones = true; this.shake = true; this.fullscreen = false;
     this.totalDeaths = 0; this.randomBestStreak = 0; this.randomCleared = 0;
     this.oneClickPortals = false; this.editorHelpSeen = false;
+    this.fightWins = 0; this.fightBest = 0; this.fightStreak = 0;   // fight mode records
     this.ghostOn = true;         // show the ghost of your best run
     this.ghosts = {};            // best-run recordings keyed by chamber name
     this.medals = {};            // 1 bronze, 2 silver, 3 gold, keyed by chamber name

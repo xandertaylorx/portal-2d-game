@@ -117,6 +117,8 @@ export class Audio {
     add('click', this.gen(0.1, (t) => this.sine(sweep(700, 1200, t, 0.1)) * env(t, 0.002, 0.1) * 0.25));
     add(Sfx.TurretSpot, this.gen(0.18, (t) => this.square(t < 0.07 ? 880 : 1320) * env(t, 0.003, 0.18) * 0.22));
     add(Sfx.TurretFire, this.gen(0.35, (t) => (this.saw(sweep(1400, 120, t, 0.3)) * 0.5 + this.noise() * 0.35 * Math.max(0, 1 - t * 6)) * env(t, 0.002, 0.35)));
+    add(Sfx.Bolt, this.gen(0.2, (t) => (this.saw(sweep(1900, 500, t, 0.18)) * 0.4 + this.sine(sweep(900, 300, t, 0.18)) * 0.3) * env(t, 0.002, 0.2) * 0.8));
+    add(Sfx.Hit, this.gen(0.18, (t) => (this.noise() * 0.6 + this.square(sweep(160, 60, t, 0.15)) * 0.5) * env(t, 0.002, 0.18) * 0.9));
     add('ambient', this.ambience());
     add('laserHum', this.gen(1, (t) => (this.saw(100) * 0.5 + this.saw(200) * 0.25 + this.sine(300) * 0.25) * (0.8 + 0.2 * Math.sin(TAU * 4 * t)) * 0.5));
     add('portalHum', this.gen(1, (t) => (this.sine(220) * 0.5 + this.sine(330) * 0.3 + this.sine(440) * 0.12) * (0.75 + 0.25 * Math.sin(TAU * 2 * t)) * 0.6));

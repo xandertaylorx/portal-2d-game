@@ -256,12 +256,31 @@ function buildPortal(ramp, linked, vertical) {
   return sheet;
 }
 
+/** The evil twin: the player's sprite sheet washed in a dark red, with burning eyes. */
+function makeEvil(tex) {
+  const c = document.createElement('canvas');
+  c.width = tex.width; c.height = tex.height;
+  const x = c.getContext('2d');
+  x.imageSmoothingEnabled = false;
+  x.drawImage(tex, 0, 0);
+  x.globalCompositeOperation = 'multiply';
+  x.fillStyle = 'rgb(255,70,80)';
+  x.fillRect(0, 0, c.width, c.height);
+  x.globalCompositeOperation = 'destination-in';
+  x.drawImage(tex, 0, 0);
+  x.globalCompositeOperation = 'source-atop';
+  x.fillStyle = 'rgba(40,0,10,0.35)';
+  x.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
 export const Sprites = {
   ready: false,
   setLook(look) {
     this.look = cleanLook(look);
     this.playerSheet = buildPlayerSheet(this.look);
     this.playerTex = this.playerSheet.toCanvas();
+    this.enemyTex = makeEvil(this.playerTex);
   },
   load() {
     if (this.ready) return;
