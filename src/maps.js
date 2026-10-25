@@ -43,6 +43,45 @@ export class SaveData {
     return d;
   }
 
+  /** Everything worth keeping as one file: settings, times, medals, ghosts, records and your own maps. */
+  toFile() {
+    this.store();
+    const save = {};
+    for (const k of Object.keys(this)) if (k !== 'best' && k !== 'names') save[k] = this[k];
+    return { format: 'portal2d-progress', exported: new Date().toISOString(), save, maps: CustomMaps.loadAll() };
+  }
+
+  /** Merges an exported file into this save, keeping whichever side is better. Returns a summary, or null if it is not a progress file. */
+  mergeFile(doc) {
+    const inc = doc && doc.format === 'portal2d-progress' && doc.save && typeof doc.save === 'object' ? doc.save : null;
+    if (!inc) return null;
+    let chambers = 0, maps = 0;
+    if (inc.times && typeof inc.times === 'object') {
+      for (const [name, t] of Object.entries(inc.times)) {
+        if (!(t > 0) || typeof t !== 'number') continue;
+        if (!(this.times[name] > 0) || t < this.times[name]) {
+          if (!(this.times[name] > 0)) chambers++;
+          this.times[name] = t;
+          if (inc.ghosts && typeof inc.ghosts[name] === 'string') this.ghosts[name] = inc.ghosts[name];
+        }
+      }
+    }
+    if (inc.medals && typeof inc.medals === 'object') for (const [n, m] of Object.entries(inc.medals)) if (m > (this.medals[n] || 0) && m <= 3) this.medals[n] = m;
+    for (const k of ['totalDeaths', 'randomBestStreak', 'randomCleared', 'fightWins', 'fightBest']) if (typeof inc[k] === 'number' && inc[k] > (this[k] || 0)) this[k] = inc[k];
+    for (const k of ['master', 'sfx', 'ambience', 'cones', 'shake', 'oneClickPortals', 'ghostOn']) if (typeof inc[k] === typeof this[k]) this[k] = inc[k];
+    if (inc.look && typeof inc.look === 'object') this.look = cleanLook(inc.look);
+    if (Array.isArray(doc.maps)) {
+      const have = new Set(CustomMaps.loadAll().map((m) => m.id));
+      for (const raw of doc.maps) {
+        const m = new CustomMap(raw);
+        if (!have.has(m.id) && m.sanitize()) { CustomMaps.save(m); have.add(m.id); maps++; }
+      }
+    }
+    this.best = this.names.map((n) => this.times[n] || 0);
+    this.store();
+    return { chambers, maps };
+  }
+
   store() {
     for (let i = 0; i < this.names.length && i < this.best.length; i++) if (this.best[i] > 0) this.times[this.names[i]] = this.best[i];
     const o = {};

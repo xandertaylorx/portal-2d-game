@@ -45,6 +45,11 @@ Fast ways to get one:
 3. Exported C# chambers get theirs from `test/traces.json`: run `node tools/make-solutions.mjs` after re-exporting (writes `data/solutions.json`
    and `data/pars.json`).
 
+## Progress file
+
+`SaveData.toFile()` / `mergeFile()` (src/maps.js) back the Options EXPORT/IMPORT PROGRESS buttons. A new save field is picked up by export automatically;
+if it needs a special merge rule (best-of, max) add it in `mergeFile`. `node tests/progress.mjs` covers it.
+
 ## Fight mode
 
 `src/fight.js`: `generateArena(seed)` builds a 40x22 arena (stepped platforms, goo, gel, plates, lift beams, ceiling turrets, lasers, cubes), `Fight`

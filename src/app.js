@@ -16,7 +16,7 @@ import { Fight, ARENA_W, ARENA_H } from './fight.js';
 import { MapLibrary } from './library.js';
 import { pickRandomTest } from './random.js';
 
-export const VERSION = '2.16.0';
+export const VERSION = '2.17.0';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 
@@ -116,6 +116,40 @@ export class App {
   setScreen(s) {
     if (this.screen === 'fight' && s !== 'fight') this.leaveFight();
     this.screen = s; this.stateT = 0; this.paused = false;
+  }
+
+  // ================================================================ progress file
+
+  /** Downloads your progress (times, medals, ghosts, settings, character and your maps) as one JSON file. */
+  exportProgress() {
+    const blob = new Blob([JSON.stringify(this.save.toFile())], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'portal2d-progress.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    this.showToast('PROGRESS EXPORTED');
+  }
+
+  /** Lets you pick a progress file and merges it in (the better time or medal wins, maps are added). */
+  importProgress() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'application/json,.json';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        if (file.size > 20e6) throw new Error('too big');
+        const r = this.save.mergeFile(JSON.parse(await file.text()));
+        if (!r) { this.showToast('THAT IS NOT A PORTAL 2D PROGRESS FILE'); return; }
+        const s = this.save;
+        this.audio.master = s.master; this.audio.sfxVolume = s.sfx; this.audio.ambienceVolume = s.ambience; this.audio.applyVolumes();
+        this.renderer.windowsEnabled = s.cones;
+        this.library.reload();
+        this.showToast(`PROGRESS IMPORTED: ${r.chambers} NEW CHAMBERS, ${r.maps} NEW MAPS`);
+      } catch { this.showToast('COULD NOT READ THAT FILE'); }
+    };
+    input.click();
   }
 
   // ================================================================ fight mode
@@ -806,7 +840,7 @@ export class App {
   drawOptions() {
     const g = this.g, s = this.save;
     this.header('OPTIONS', 'AUDIO, VISUALS AND DISPLAY');
-    const panel = R(K.ScreenW / 2 - 300, 118, 600, 596);
+    const panel = R(K.ScreenW / 2 - 300, 122, 600, 594);
     UI.panel(panel);
     const x = panel.x + 40, w = panel.w - 80;
     let y = panel.y + 48;
@@ -815,9 +849,9 @@ export class App {
       const nv = UI.slider(id, R(x, y, w, 20), label, s[key]);
       if (nv !== null) { s[key] = nv; changed = true; }
     };
-    sl('vol_master', 'MASTER VOLUME', 'master'); y += 66;
-    sl('vol_sfx', 'EFFECTS', 'sfx'); y += 66;
-    sl('vol_amb', 'AMBIENCE', 'ambience'); y += 42;
+    sl('vol_master', 'MASTER VOLUME', 'master'); y += 60;
+    sl('vol_sfx', 'EFFECTS', 'sfx'); y += 60;
+    sl('vol_amb', 'AMBIENCE', 'ambience'); y += 38;
     if (changed) {
       this.audio.master = s.master; this.audio.sfxVolume = s.sfx; this.audio.ambienceVolume = s.ambience;
       this.audio.applyVolumes();
@@ -825,21 +859,23 @@ export class App {
     const tg = (id, label, key, after) => {
       const nv = UI.toggle(id, R(x - 10, y, w + 20, 54), label, s[key]);
       if (nv !== null) { s[key] = nv; changed = true; after?.(nv); }
-      y += 60;
+      y += 58;
     };
     tg('opt_cones', 'PORTAL WINDOWS', 'cones', (v) => { this.renderer.windowsEnabled = v; });
     tg('opt_shake', 'SCREEN SHAKE', 'shake');
     const fsNow = !!document.fullscreenElement;
     const fs = UI.toggle('opt_fs', R(x - 10, y, w + 20, 54), 'FULLSCREEN (F11)', fsNow);
     if (fs !== null) this.toggleFullscreen();
-    y += 60;
+    y += 58;
     const oc = UI.toggle('opt_oneclick', R(x - 10, y, w + 20, 54), 'ONE-BUTTON PORTALS', s.oneClickPortals);
     if (oc !== null) { s.oneClickPortals = oc; changed = true; }
     UI.text(s.oneClickPortals ? 'LEFT CLICK ALTERNATES BLUE AND ORANGE' : 'LEFT CLICK = BLUE   RIGHT CLICK = ORANGE', V(x, y + 58), 16, DIM);
-    y += 88;
-    if (UI.button('opt_char', R(x - 10, y, w + 20, 72), 'CUSTOMISE CHARACTER', { accent: PP.OrangeRamp[2], sub: 'COLOURS, HATS, FACES AND OUTFITS' })) this.go(() => this.setScreen('character'));
-    y += 84;
-    UI.text(`VERSION ${VERSION}   WEB EDITION`, V(x, y), 16, DIM);
+    y += 82;
+    if (UI.button('opt_char', R(x - 10, y, w + 20, 64), 'CUSTOMISE CHARACTER', { accent: PP.OrangeRamp[2], sub: 'COLOURS, HATS, FACES AND OUTFITS' })) this.go(() => this.setScreen('character'));
+    y += 74;
+    const hw = (w + 20 - 10) / 2;
+    if (UI.smallButton('opt_export', R(x - 10, y, hw, 48), 'EXPORT PROGRESS')) this.exportProgress();
+    if (UI.smallButton('opt_import', R(x - 10 + hw + 10, y, hw, 48), 'IMPORT PROGRESS')) this.importProgress();
     if (changed && !UI.mouseDown) s.store();
   }
 

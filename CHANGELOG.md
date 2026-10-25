@@ -2,6 +2,16 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.17.0] - 2026-10-25
+
+### Added
+- **Export and import your progress.** Options now has EXPORT PROGRESS and IMPORT PROGRESS. The file holds your best times, medals,
+  best-run ghosts, records, settings, character and your own maps. Importing merges it in: faster times and better medals win,
+  and maps you didn't already have are added, so it is safe to import on a second device.
+
+### Changed
+- The version number now only shows on the main menu.
+
 ## [2.16.0] - 2026-10-25
 
 ### Added
