@@ -34,7 +34,8 @@ export class Renderer {
     this.viewData = [null, null];
     this.lensCanvas = makeCanvas(192, 192);
     this.lensCtx = this.lensCanvas.getContext('2d');
-    this.lightCanvas = makeCanvas(K.CanvasW / 2, K.CanvasH / 2);   // half-res light map: bilinear upscale softens the shadows
+    this.lightCanvas = makeCanvas(K.CanvasW / 2, K.CanvasH / 2);   // half-res light map
+    this.lightSmall = makeCanvas(K.CanvasW / 4, K.CanvasH / 4);    // quarter-res copy: the smooth upscale blurs every shadow and glow edge
     this.lights = [];
     this.occluders = [];
   }
@@ -512,13 +513,21 @@ export class Renderer {
     if (col.a < 2 || r <= 0) return;
     if (x + r < view.x || x - r > view.x + view.w || y + r < view.y || y - r > view.y + view.h) return;
     if (w.isSolid(Math.floor(x / T), Math.floor(y / T))) return;
-    const n = clamp(Math.round(r / 3.5), 28, 72), pts = [];
-    for (let i = 0; i < n; i++) {
-      const ang = (i + 0.37) / n * Math.PI * 2, dx = Math.cos(ang), dy = Math.sin(ang);
-      const d = Math.min(r, this.rayDist(w, x, y, dx, dy, r) + 14, this.boxDist(x, y, dx, dy, r) + 4);
-      pts.push({ x: x + dx * d, y: y + dy * d });
+    const n = clamp(Math.round(r / 3.5), 28, 72);
+    // big lights are area lights: several samples spread over a small disc give soft penumbrae
+    const spread = r >= 120 ? 9 : 0, samples = spread ? 3 : 1;
+    const part = samples > 1 ? withAlpha(col, col.a / 255 / samples) : col;
+    for (let sIdx = 0; sIdx < samples; sIdx++) {
+      const ox = spread ? x + Math.cos(sIdx * 2.094 + 0.5) * spread : x, oy = spread ? y + Math.sin(sIdx * 2.094 + 0.5) * spread : y;
+      if (w.isSolid(Math.floor(ox / T), Math.floor(oy / T))) continue;
+      const pts = [];
+      for (let i = 0; i < n; i++) {
+        const ang = (i + 0.37) / n * Math.PI * 2, dx = Math.cos(ang), dy = Math.sin(ang);
+        const d = Math.min(r, this.rayDist(w, ox, oy, dx, dy, r) + 14, this.boxDist(ox, oy, dx, dy, r) + 4);
+        pts.push({ x: ox + dx * d, y: oy + dy * d });
+      }
+      this.lights.push({ pts, x: ox, y: oy, r, col: part });
     }
-    this.lights.push({ pts, x, y, r, col });
   }
 
   /** Like castLight, but for sources sitting in a wall surface: nudges the origin out into open air first. */
@@ -598,11 +607,15 @@ export class Renderer {
     g.additive = false;
     g.m = saved;
     g.setTarget(main);
+    const sm = this.lightSmall.getContext('2d');
+    sm.imageSmoothingEnabled = true;
+    sm.globalCompositeOperation = 'copy';
+    sm.drawImage(this.lightCanvas, 0, 0, this.lightSmall.width, this.lightSmall.height);
     mctx.setTransform(1, 0, 0, 1, 0, 0);
     mctx.globalAlpha = 1;
     mctx.imageSmoothingEnabled = true;
     mctx.globalCompositeOperation = 'multiply';
-    mctx.drawImage(this.lightCanvas, 0, 0, main.width, main.height);
+    mctx.drawImage(this.lightSmall, 0, 0, main.width, main.height);
     mctx.globalCompositeOperation = 'source-over';
     mctx.imageSmoothingEnabled = false;
     // the light map means 0.5 = the art's own colour: doubling lets strong lights push surfaces brighter than the art
@@ -614,9 +627,13 @@ export class Renderer {
     mctx.drawImage(this.scratch, 0, 0);
     mctx.globalCompositeOperation = 'source-over';
     // lit surfaces also pick up a little of the light's colour on top (a cheap bloom)
-    g.additive = true;
-    for (const l of this.lights) g.lightPoly(l.pts, l.x, l.y, l.r, withAlpha(l.col, l.col.a / 255 * 0.22));
-    g.additive = false;
+    mctx.globalAlpha = 0.2;
+    mctx.imageSmoothingEnabled = true;
+    mctx.globalCompositeOperation = 'lighter';
+    mctx.drawImage(this.lightSmall, 0, 0, main.width, main.height);
+    mctx.globalAlpha = 1;
+    mctx.globalCompositeOperation = 'source-over';
+    mctx.imageSmoothingEnabled = false;
   }
 
   drawParticles(w) {

@@ -259,12 +259,16 @@ export class Gfx {
     ctx.fill();
     this._reset();
   }
+  /** A radial glow with a smooth (roughly gaussian) falloff from `inner` at the centre to `outer` at the rim. */
   circleGrad(cx, cy, r, inner, outer) {
     if (r <= 0) return;
     const ctx = this.ctx;
     this._local();
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    g.addColorStop(0, inner.css); g.addColorStop(1, outer.css);
+    for (const [s, k] of [[0, 1], [0.15, 0.78], [0.3, 0.5], [0.5, 0.24], [0.7, 0.08], [0.88, 0.015], [1, 0]]) {
+      const ch = (a, b) => Math.round(b + (a - b) * k);
+      g.addColorStop(s, `rgba(${ch(inner.r, outer.r)},${ch(inner.g, outer.g)},${ch(inner.b, outer.b)},${(outer.a + (inner.a - outer.a) * k) / 255})`);
+    }
     ctx.globalAlpha = this.opacity;
     ctx.fillStyle = g;
     ctx.beginPath();
@@ -294,8 +298,7 @@ export class Gfx {
     const ctx = this.ctx, a = color.a / 255, rgb = `${color.r},${color.g},${color.b}`;
     this._local();
     const g = vertical ? ctx.createLinearGradient(x, 0, x + w, 0) : ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, `rgba(${rgb},0)`); g.addColorStop(0.35, `rgba(${rgb},${a * 0.35})`);
-    g.addColorStop(0.5, `rgba(${rgb},${a})`); g.addColorStop(0.65, `rgba(${rgb},${a * 0.35})`); g.addColorStop(1, `rgba(${rgb},0)`);
+    for (const [s, k] of [[0, 0], [0.12, 0.04], [0.25, 0.14], [0.38, 0.4], [0.5, 1], [0.62, 0.4], [0.75, 0.14], [0.88, 0.04], [1, 0]]) g.addColorStop(s, `rgba(${rgb},${a * k})`);
     ctx.globalAlpha = this.opacity;
     ctx.fillStyle = g;
     ctx.fillRect(x, y, w, h);

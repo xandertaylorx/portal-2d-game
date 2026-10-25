@@ -2,6 +2,13 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.13.1] - 2026-10-25
+
+### Changed
+- Softer light everywhere. Shadows now fade out with soft penumbrae instead of cutting off, and every glow
+  (portals, lamps, lasers, the exit, doors) falls off smoothly with no visible rim.
+- Chambers are a little brighter so the lit areas read better while still feeling moody.
+
 ## [2.13.0] - 2026-10-25
 
 ### Changed
