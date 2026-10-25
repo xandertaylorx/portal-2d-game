@@ -272,6 +272,52 @@ export class Gfx {
     ctx.fill();
     this._reset();
   }
+  /** A polygon filled with a radial light falloff (roughly inverse-square), used for shadow-casting lights. */
+  lightPoly(pts, cx, cy, r, color) {
+    if (r <= 0 || pts.length < 3) return;
+    const ctx = this.ctx, a = color.a / 255;
+    this._local();
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    const rgb = `${color.r},${color.g},${color.b}`;
+    for (const [s, k] of [[0, 1], [0.12, 0.62], [0.3, 0.3], [0.55, 0.11], [0.8, 0.03], [1, 0]]) g.addColorStop(s, `rgba(${rgb},${a * k})`);
+    ctx.globalAlpha = this.opacity;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.fill();
+    this._reset();
+  }
+  /** A soft band of light centred on a horizontal or vertical line (laser bloom, fizzler glow). */
+  glowBand(x, y, w, h, vertical, color) {
+    const ctx = this.ctx, a = color.a / 255, rgb = `${color.r},${color.g},${color.b}`;
+    this._local();
+    const g = vertical ? ctx.createLinearGradient(x, 0, x + w, 0) : ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, `rgba(${rgb},0)`); g.addColorStop(0.35, `rgba(${rgb},${a * 0.35})`);
+    g.addColorStop(0.5, `rgba(${rgb},${a})`); g.addColorStop(0.65, `rgba(${rgb},${a * 0.35})`); g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.globalAlpha = this.opacity;
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    this._reset();
+  }
+  /** A blurred halo around a rectangle (fades from the edge out to `spread`), drawn from edge strips and corner fans. */
+  haloRect(x, y, w, h, spread, color) {
+    const ctx = this.ctx, a = color.a / 255, rgb = `${color.r},${color.g},${color.b}`;
+    this._local();
+    ctx.globalAlpha = this.opacity;
+    const stops = (g) => { for (const [s, k] of [[0, 1], [0.4, 0.42], [0.7, 0.12], [1, 0]]) g.addColorStop(s, `rgba(${rgb},${a * k})`); return g; };
+    const edge = (x0, y0, x1, y1, rx, ry, rw, rh) => { ctx.fillStyle = stops(ctx.createLinearGradient(x0, y0, x1, y1)); ctx.fillRect(rx, ry, rw, rh); };
+    edge(0, y, 0, y - spread, x, y - spread, w, spread);
+    edge(0, y + h, 0, y + h + spread, x, y + h, w, spread);
+    edge(x, 0, x - spread, 0, x - spread, y, spread, h);
+    edge(x + w, 0, x + w + spread, 0, x + w, y, spread, h);
+    for (const [cx, cy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+      ctx.fillStyle = stops(ctx.createRadialGradient(cx, cy, 0, cx, cy, spread));
+      ctx.fillRect(cx < x + w / 2 ? cx - spread : cx, cy < y + h / 2 ? cy - spread : cy, spread, spread);
+    }
+    this._reset();
+  }
   circle(cx, cy, r, color) {
     const ctx = this.ctx;
     this._local();

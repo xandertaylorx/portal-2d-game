@@ -2,6 +2,16 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.12.0] - 2026-10-25
+
+### Changed
+- **Real lighting.** Portals, lamps, laser beams, laser impacts, receivers, buttons, emitters and the exit now cast
+  light that is blocked by walls, so glows spill across floors and leave true shadows behind corners.
+- Lasers have a soft bloom, energy pulses racing along the beam and a white-hot impact flare.
+- Held cubes (and cubes resting on buttons) are wrapped in a holographic field instead of a blue box: a blurred halo,
+  scanlines, a sweeping light band, brief glitch ghosting and corner brackets.
+- Fizzlers glow into the room around them.
+
 ## [2.11.0] - 2026-10-24
 
 ### Changed

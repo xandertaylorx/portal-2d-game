@@ -14,7 +14,7 @@ import { MapEditor } from './editor.js';
 import { MapLibrary } from './library.js';
 import { pickRandomTest } from './random.js';
 
-export const VERSION = '2.11.0';
+export const VERSION = '2.12.0';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 
