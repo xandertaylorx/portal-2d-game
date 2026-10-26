@@ -15,7 +15,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-PolyForm%20Strict-d97757?style=flat-square">
 </p>
 
-<p align="center"><b><a href="https://xandertaylorx.github.io/portal-2d-game/">▶ Play it in your browser</a></b> - no download, nothing to install.</p>
+<p align="center"><b><a href="https://portal.crooli.com/">▶ Play it in your browser</a></b> - no download, nothing to install.</p>
 
 ---
 
