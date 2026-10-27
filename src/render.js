@@ -11,6 +11,7 @@ import {
 import { PP, Sprites, LevelArt, PORTAL_FRAMES, PLAYER_H } from './art.js';
 import { PixelFont, makeCanvas } from './gfx.js';
 import { World, PKind, GunMode } from './world.js';
+import { drawPlayground } from './playground-art.js';
 
 const T = K.Tile;
 const snap = (v) => roundEven(v * K.Px) / K.Px;
@@ -114,6 +115,7 @@ export class Renderer {
   }
 
   drawWorld(w, view, drawPortals) {
+    if (w.playground) { drawPlayground(this, w, view, drawPortals); return; }
     const g = this.gfx;
     const a = this.artFor(w);
     g.rectR(view, PP.Bg);
@@ -123,7 +125,7 @@ export class Renderer {
     const x1 = Math.min(w.w - 1, Math.trunc((view.x + view.w) / T)), y1 = Math.min(w.h - 1, Math.trunc((view.y + view.h) / T));
     // doors sit behind the player and cubes, so the open gap never covers them
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const c = w.tiles[x][y];
+      const c = w.at(x, y);
       if (World.isDoor(c)) this.drawDoor(w, x, y, c.charCodeAt(0) - 97);
     }
     for (const b of w.buttons) this.drawButton(b);
@@ -138,7 +140,7 @@ export class Renderer {
     this.drawLampFixtures(w, view);
     this.drawShafts(w, view);
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const c = w.tiles[x][y];
+      const c = w.at(x, y);
       if (c === '~') this.drawGoo(w, x, y);
       else if (c === '|') this.drawFizzler(w, x, y);
       else if (World.isDoor(c)) this.drawDoorLamp(w, x, y, c.charCodeAt(0) - 97);
@@ -177,7 +179,8 @@ export class Renderer {
     }
   }
 
-  lampList(w) {
+  lampList(w, view) {
+    if (w.playground) return w.lampsFor(view);
     const lamps = [];
     for (let x = 3; x < w.w - 3; x += 7)
       for (let y = 1; y < w.h - 4; y++)
@@ -187,7 +190,7 @@ export class Renderer {
 
   drawLampFixtures(w, view) {
     const g = this.gfx;
-    for (const [x, y] of this.lampList(w)) {
+    for (const [x, y] of this.lampList(w, view)) {
       const lx = x * T + T / 2, ly = y * T;
       if (lx < view.x - 300 || lx > view.x + view.w + 300) continue;
       g.tex(Sprites.lampTex, 0, 0, 14, 4, x * T + 2, y * T, 28, 8);
@@ -201,7 +204,7 @@ export class Renderer {
   drawShafts(w, view) {
     const g = this.gfx, t = this.time;
     g.additive = true;
-    for (const [x, y] of this.lampList(w)) {
+    for (const [x, y] of this.lampList(w, view)) {
       const lx = x * T + T / 2, ly = y * T + 9;
       if (lx < view.x - 300 || lx > view.x + view.w + 300 || ly < view.y - 320 || ly > view.y + view.h + 40) continue;
       const flick = 0.92 + 0.08 * Math.sin(t * 1.3 + lx);
@@ -706,7 +709,7 @@ export class Renderer {
     const pl = w.player;
     if (pl && !pl.dead) { const r = pl.rect; this.occluders.push({ x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }); }
 
-    for (const [x, y] of this.lampList(w)) {
+    for (const [x, y] of this.lampList(w, view)) {
       const lx = x * T + T / 2, ly = y * T;
       const flick = 0.93 + 0.07 * Math.sin(t * 1.3 + lx) + (Math.trunc(t * 9 + lx) % 41 === 0 ? -0.15 : 0);
       this.castLight(w, lx, ly + 10, 300, C(255, 238, 205, 240 * flick), view);
@@ -763,7 +766,7 @@ export class Renderer {
       this.castLight(w, pl.pos.x + pl.aim.x * 24, pl.pos.y - 6 + pl.aim.y * 24, 90 + pl.gunKick * 70, withAlpha(gunCol, 0.3 + pl.gunKick * 0.6), view);
     }
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const c = w.tiles[x][y];
+      const c = w.at(x, y);
       if (c === '~' && w.at(x, y - 1) !== '~' && x % 2 === 0) this.castLight(w, x * T + 16, y * T - 2, 100, C(120, 255, 60, 90), view);
       else if (c === '|' && x % 1 === 0 && y % 2 === 0) this.castLight(w, x * T + 16, y * T + 16, 90, C(70, 150, 255, 80), view);
       else if (World.isDoor(c)) {
@@ -780,6 +783,12 @@ export class Renderer {
     g.setTarget(this.lightCanvas);
     g.clear(PP.Ambient);
     g.m = saved.map((v) => v * k);
+    if (w.playground) {
+      const ambient = mix(C(30, 40, 67), C(122, 125, 119), w.daylight);
+      g.rectR(view, ambient);
+      g.rectGradV(view.x, 28 * T, view.w, 14 * T, C(25, 30, 43, 0), C(25, 30, 43));
+      if (view.y + view.h > 42 * T) g.rect(view.x, 42 * T, view.w, Math.max(0, view.y + view.h - 42 * T), C(25, 30, 43));
+    }
     g.additive = true;
     for (const l of this.lights) g.lightPoly(l.pts, l.x, l.y, l.r, l.col);
     g.additive = false;

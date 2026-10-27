@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<base href="../">
+<title>Playground browser checks</title>
+<style>
+body{background:#121820;color:#d8eadf;font:14px monospace;margin:20px}canvas{image-rendering:pixelated;width:min(100%,1280px);display:block;margin:16px 0}button{font:inherit;padding:10px 18px;margin:4px;background:#273c40;color:#e3eacb;border:1px solid #6e9b83;cursor:pointer}
+</style>
+<h1>Playground browser checks</h1>
+<p id="result">Running…</p>
+<div id="scenes"></div><canvas id="game" width="640" height="360"></canvas>
+<script type="module">
+import { App } from './src/app.js';
+import { K, V } from './src/core.js';
+import { DAY_SECONDS } from './src/playground.js';
+import { emptyInput } from './src/world.js';
+import { UI } from './src/ui.js';
+const result = document.querySelector('#result');
+try {
+  const levels = await (await fetch('data/levels.json')).json();
+  const app = new App(document.querySelector('#game'), { levels });
+  app.fade = 0; app.fadeDir = 0; app.dt = 1/60;
+  const check = (ok, text) => { if (!ok) throw new Error(text); };
+  const scene = (name) => {
+    app.openPlayground(1234);
+    const w = app.playground, ch = w.chunk(0), T = K.Tile;
+    if (name === 'Night') w.time = DAY_SECONDS / 2;
+    if (name === 'Lab') w.player.pos = V(21 * T, (ch.roomY + 14) * T - 15);
+    if (name === 'Cave') w.player.pos = V(53 * T, 78 * T);
+    if (name === 'Water') {
+      let lake;
+      for (let i = 1; i < 20; i++) if (w.chunk(i).lake) { lake = w.chunk(i); break; }
+      w.player.pos = V((lake.start + 58.5) * T, (lake.base + 3) * T);
+    }
+    if (name === 'Portals') {
+      const lab = w.buildPortal(1, V(16, ch.roomY + 14), V(0, -1), V(16.75 * T, (ch.roomY + 14) * T));
+      const ground = w.buildPortal(0, V(36, ch.base), V(0, -1), V(36.75 * T, ch.base * T));
+      check(lab && ground, 'test portals must fit');
+      lab.open = ground.open = 1; lab.age = ground.age = 2;
+      w.portals = [ground, lab];
+      w.player.pos = V(33 * T, ch.base * T - 15);
+    }
+    for (let i = 0; i < 30; i++) w.update(K.SimDt, emptyInput());
+    w.events.length = 0;
+    app.followPlayer(0, true, w); app.updateCam(0);
+    app.renderer.time = w.time;
+    UI.beginFrame(1/60, V(1200, 600), false, false);
+    app.draw();
+    return w;
+  };
+  for (const name of ['Day', 'Night', 'Water', 'Lab', 'Cave', 'Portals']) {
+    scene(name);
+    const b = document.createElement('button'); b.textContent = name;
+    b.onclick = () => { scene(name); result.textContent = `PASS: viewing ${name}. All six scenes and lifecycle checks passed.`; };
+    document.querySelector('#scenes').append(b);
+  }
+  const w = app.playground, samples = app.rec.data.length;
+  app.step(w, 1/60, emptyInput(), false);
+  check(app.rec.data.length === samples, 'playground must not record campaign ghosts');
+  app.setScreen('menu'); check(app.playground === null, 'leaving must release playground');
+  app.draw();
+  app.openPlayground(1234); app.paused = true; app.draw();
+  scene('Day');
+  result.textContent = 'PASS: day, night, lake, lab, cave and linked outdoor/underground portal views rendered; pause/menu lifecycle passed.';
+} catch(e) { result.textContent = `FAIL: ${e.stack}`; console.error(e); }
+</script>

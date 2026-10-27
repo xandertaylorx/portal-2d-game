@@ -61,6 +61,7 @@ function jumpFromUrl(app) {
   } else if (q.has('screen')) {
     const s = q.get('screen');
     if (['select', 'options', 'controls', 'character', 'mymaps'].includes(s)) { if (s === 'mymaps') app.library.reload(); app.setScreen(s); skip(); }
+    else if (s === 'playground') { app.openPlayground(); skip(); }
     else if (s === 'editor') {
       const m = CustomMap.blank('DEMO');
       app.openEditor(m); app.editor.persist = false; app.editor.demo(); app.editor.showHelp = q.has('help'); skip();

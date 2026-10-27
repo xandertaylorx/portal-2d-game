@@ -191,7 +191,9 @@ export class World {
 
   // ---------------------------------------------------------------- tiles
 
-  at(x, y) { return x < 0 || y < 0 || x >= this.w || y >= this.h ? 'X' : this.tiles[x][y]; }
+  inBounds(x, y) { return x >= 0 && y >= 0 && x < this.w && y < this.h; }
+  rayInBounds(x, y) { return x >= -1 && y >= -1 && x <= this.w && y <= this.h; }
+  at(x, y) { return this.inBounds(x, y) ? this.tiles[x][y] : 'X'; }
 
   isSolid(x, y) {
     const c = this.at(x, y);
@@ -218,7 +220,7 @@ export class World {
       if (tmx < tmy) { t = tmx; x += sx; tmx += tdx; n = V(-sx, 0); }
       else { t = tmy; y += sy; tmy += tdy; n = V(0, -sy); }
       if (t > maxDist) break;
-      if (x < -1 || y < -1 || x > this.w || y > this.h) break;
+      if (!this.rayInBounds(x, y)) break;
       if (blocks(x, y)) return { hit: true, dist: t, tile: V(x, y), normal: n, point: V(o.x + d.x * t, o.y + d.y * t) };
     }
     return { hit: false, dist: maxDist, tile: V(0, 0), normal: V(0, 0), point: V(o.x + d.x * maxDist, o.y + d.y * maxDist) };
@@ -247,7 +249,7 @@ export class World {
   }
 
   pairTileOk(t, n, isFixed) {
-    if (t.x < 0 || t.y < 0 || t.x >= this.w || t.y >= this.h) return false;
+    if (!this.inBounds(t.x, t.y)) return false;
     if (!isFixed && !this.isPortalable(t.x, t.y)) return false;
     return !this.isSolid(t.x + n.x, t.y + n.y);
   }

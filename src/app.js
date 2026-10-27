@@ -15,6 +15,7 @@ import { GhostRecorder, GhostPlayback, SolutionGhost } from './ghost.js';
 import { Fight, ARENA_W, ARENA_H } from './fight.js';
 import { MapLibrary } from './library.js';
 import { pickRandomTest } from './random.js';
+import { PlaygroundWorld } from './playground.js';
 
 export const VERSION = '2.18.0';
 const DIM = C(150, 158, 172);
@@ -115,6 +116,7 @@ export class App {
 
   setScreen(s) {
     if (this.screen === 'fight' && s !== 'fight') this.leaveFight();
+    if (this.screen === 'playground' && s !== 'playground') this.playground = null;
     this.screen = s; this.stateT = 0; this.paused = false;
   }
 
@@ -150,6 +152,53 @@ export class App {
       } catch { this.showToast('COULD NOT READ THAT FILE'); }
     };
     input.click();
+  }
+
+  // ================================================================ playground
+
+  openPlayground(seed) {
+    this.setScreen('playground');
+    this.playground = new PlaygroundWorld(seed);
+    this.accumulator = 0; this.hitstop = 0; this.lead = V(0, 0);
+    this.pend = { jump: false, use: false, blue: false, orange: false, cycle: false };
+    this.followPlayer(0, true, this.playground);
+    this.updateCam(0);
+  }
+
+  updatePlayground(dt) {
+    if (Input.pressed('Escape')) { this.paused = !this.paused; this.audio.click(); }
+    if (!this.paused) {
+      if (Input.pressed('KeyR')) { this.playground.respawn(); this.followPlayer(0, true, this.playground); }
+      this.step(this.playground, dt, this.readInput(), false);
+      this.followPlayer(dt, false, this.playground);
+    } else this.audio.setScene({ laser: 0, portal: 0, speed: 0 });
+    this.updateCam(dt);
+  }
+
+  drawPlayground() {
+    const g = this.g, w = this.playground, p = w.player;
+    const top = R(22, 20, 490, 82), bottom = R(22, K.ScreenH - 60, 1120, 38);
+    g.opacity = this.hudAlpha('pg_top', top);
+    UI.panel(top, 0.85);
+    UI.text('PLAYGROUND / FREE ROAM', V(40, 36), 22, PP.CreamHi);
+    const hour = Math.floor(w.clock), minute = Math.floor(w.clock % 1 * 60);
+    const depth = Math.max(0, Math.floor(p.pos.y / K.Tile) - 28);
+    UI.text(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}   X ${Math.floor(p.pos.x / K.Tile)}   DEPTH ${depth}   SEED ${w.seed}`, V(40, 74), 14, PP.Cream);
+    g.opacity = this.hudAlpha('pg_bottom', bottom);
+    UI.panel(bottom, 0.75);
+    UI.text('A/D MOVE   SPACE JUMP / SWIM   MOUSE PORTALS   E CUBE   R HOME   ESC PAUSE', V(38, bottom.y + 12), 14, PP.Cream);
+    g.opacity = 1;
+    if (!this.paused) { this.drawCrosshair(w); return; }
+    g.rect(0, 0, K.ScreenW, K.ScreenH, C(6, 8, 12, 170));
+    const r = R(K.ScreenW / 2 - 250, 155, 500, 410);
+    UI.panel(r);
+    UI.textShadow('PLAYGROUND PAUSED', V(K.ScreenW / 2, r.y + 42), 28, PP.CreamHi, Align.Center);
+    const x = r.x + 30, bw = r.w - 60;
+    if (UI.button('pg_resume', R(x, r.y + 92, bw, 52), 'RESUME')) this.paused = false;
+    if (UI.button('pg_home', R(x, r.y + 154, bw, 52), 'RETURN HOME')) { w.respawn(); this.followPlayer(0, true, w); this.paused = false; }
+    if (UI.button('pg_new', R(x, r.y + 216, bw, 52), 'NEW WORLD')) this.go(() => this.openPlayground());
+    if (UI.button('pg_menu', R(x, r.y + 278, bw, 52), 'MAIN MENU')) this.go(() => this.setScreen('menu'));
+    UI.text('A NEW WORLD IS GENERATED EACH VISIT', V(K.ScreenW / 2, r.y + 370), 14, DIM, Align.Center);
   }
 
   // ================================================================ fight mode
@@ -195,7 +244,7 @@ export class App {
     f.drawHud(g, UI, Align);
     if (f.phase === 'matchEnd') this.drawFightEnd();
     else if (this.paused) this.drawFightPause();
-    else this.drawCrosshair();
+    else this.drawCrosshair(f.world);
   }
 
   drawFightPause() {
@@ -285,7 +334,7 @@ export class App {
 
   update(dt) {
     const playing = (this.screen === 'play' || this.screen === 'complete') && this.world != null;
-    const wantHidden = (this.screen === 'play' && !this.paused && this.world?.player && !this.world.player.dead) || (this.screen === 'fight' && !this.paused && this.fight?.phase !== 'matchEnd');
+    const wantHidden = (this.screen === 'playground' && !this.paused) || (this.screen === 'play' && !this.paused && this.world?.player && !this.world.player.dead) || (this.screen === 'fight' && !this.paused && this.fight?.phase !== 'matchEnd');
     if (!!wantHidden !== this.cursorHidden) {
       this.canvas.style.cursor = wantHidden ? 'none' : 'default';
       this.cursorHidden = !!wantHidden;
@@ -301,6 +350,7 @@ export class App {
     }
 
     if (this.screen === 'fight' && this.fight) { this.updateFight(dt); return; }
+    if (this.screen === 'playground' && this.playground) { this.updatePlayground(dt); return; }
 
     if (!playing) {
       this.step(this.menuWorld, dt, emptyInput(), true);
@@ -379,7 +429,7 @@ export class App {
 
   step(w, dt, input, silent) {
     if (this.hitstop > 0) { this.hitstop -= dt; if (!silent) this.audioScene(w); return; }
-    if (this.recording && !silent) { this.stepRecorded(w, dt, input); return; }
+    if (this.recording && !silent && !w.playground) { this.stepRecorded(w, dt, input); return; }
     this.accumulator += dt;
     // one-frame presses are latched until a sim step consumes them, so frames that run no step don't swallow a jump
     const pd = this.pend;
@@ -389,7 +439,7 @@ export class App {
       const i = { ...input, jumpPressed: first && pd.jump, usePressed: first && pd.use, fireBlue: first && pd.blue, fireOrange: first && pd.orange, fireCycle: first && pd.cycle };
       if (first) pd.jump = pd.use = pd.blue = pd.orange = pd.cycle = false;
       w.update(K.SimDt, i);
-      if (!silent && w.player && !w.player.won) this.rec.step(w.player);
+      if (!silent && !w.playground && w.player && !w.player.won) this.rec.step(w.player);
       first = false;
       this.accumulator -= K.SimDt;
     }
@@ -454,8 +504,8 @@ export class App {
     return K.Px;
   }
 
-  followPlayer(dt, snap) {
-    const w = this.world, p = w.player;
+  followPlayer(dt, snap, w = this.world) {
+    const p = w.player;
     // while the solution ghost is walking the route, the camera follows it instead of you
     const sg = this.solution && this.screen === 'play' && !this.solution.done ? this.solution.pose : null;
     const target = sg ? V(sg.pos.x, sg.pos.y - 24) : p ? V(p.pos.x, p.pos.y - 24) : V(w.widthPx / 2, w.heightPx / 2);
@@ -466,16 +516,16 @@ export class App {
     }
     const viewW = K.ScreenW, viewH = K.ScreenH;
     // Clamp the follow position before looking: otherwise looking up at the bottom of a tall room does nothing.
-    target.x = w.widthPx <= viewW ? w.widthPx / 2 : clamp(target.x, viewW / 2, w.widthPx - viewW / 2);
+    if (!w.playground) target.x = w.widthPx <= viewW ? w.widthPx / 2 : clamp(target.x, viewW / 2, w.widthPx - viewW / 2);
     target.y = w.heightPx <= viewH ? w.heightPx / 2 : clamp(target.y, viewH / 2, w.heightPx - viewH / 2);
-    if (p && !p.dead && !p.won && this.screen === 'play') {
+    if (p && !p.dead && !p.won && (this.screen === 'play' || this.screen === 'playground')) {
       // Screen-relative look-ahead has no feedback loop with mouseWorld(). Move the pointer to inspect a room.
       if (Input.inside) {
         target.x += clamp((UI.mouse.x - K.ScreenW / 2) * 0.45, -240, 240);
         target.y += clamp((UI.mouse.y - K.ScreenH / 2) * 0.55, -190, 190);
       }
     }
-    target.x = w.widthPx <= viewW ? w.widthPx / 2 : clamp(target.x, viewW / 2, w.widthPx - viewW / 2);
+    if (!w.playground) target.x = w.widthPx <= viewW ? w.widthPx / 2 : clamp(target.x, viewW / 2, w.widthPx - viewW / 2);
     target.y = w.heightPx <= viewH ? w.heightPx / 2 : clamp(target.y, viewH / 2, w.heightPx - viewH / 2);
     if (snap) this.camPos = target;
     else { const k = 1 - Math.exp(-dt * 7); this.camPos = V(lerp(this.camPos.x, target.x, k), lerp(this.camPos.y, target.y, k)); }
@@ -641,7 +691,8 @@ export class App {
     const g = this.g;
     const playing = (this.screen === 'play' || this.screen === 'complete') && this.world != null;
     const inFight = this.screen === 'fight' && this.fight;
-    const shown = inFight ? this.fight.world : playing ? this.world : this.screen === 'editor' && this.editor ? this.editor.world : this.menuWorld;
+    const inPlayground = this.screen === 'playground' && this.playground;
+    const shown = inPlayground ? this.playground : inFight ? this.fight.world : playing ? this.world : this.screen === 'editor' && this.editor ? this.editor.world : this.menuWorld;
     const p = shown.player;
     const eye = this.screen === 'editor' ? this.camPos : p && !p.dead
       ? V(p.pos.x, p.pos.y - 10)
@@ -659,10 +710,11 @@ export class App {
     this.renderer.drawScene(shown, this.cam, eye);
     if (this.screen === 'play' && !this.paused && this.world?.player) this.renderer.drawAimPreview(this.world, this.world.player);
     if (inFight && !this.paused && this.fight.phase === 'fight' && shown.player && !shown.player.dead) this.renderer.drawAimPreview(shown, shown.player);
+    if (inPlayground && !this.paused) this.renderer.drawAimPreview(shown, shown.player);
     if (this.screen === 'editor') this.editor?.drawOverlay();
 
     g.identity();
-    if (this.screen !== 'editor') this.vignette();
+    if (this.screen !== 'editor' && !inPlayground) this.vignette();
     switch (this.screen) {
       case 'menu': this.drawMenu(); break;
       case 'select': this.drawSelect(); break;
@@ -675,6 +727,7 @@ export class App {
         break;
       case 'complete': this.drawHud(); this.drawComplete(); break;
       case 'fight': this.drawFight(); break;
+      case 'playground': this.drawPlayground(); break;
       case 'ending': this.drawEnding(); break;
       case 'mymaps': this.drawMyMaps(); break;
       case 'editor': this.editor?.drawUi(); break;
@@ -727,9 +780,9 @@ export class App {
     UI.text('A SIDE-SCROLLING TEST OF SPATIAL REASONING', V(x + 2, 236), 16, withAlpha(DIM, 0.8));
     this.mascot(V(x + 990, 196), 4, true);
 
-    // three main actions, then the rest in one quiet row
+    // Main modes, then the rest in one quiet row
     let y = 280;
-    const h = 60, gap = 8, bw = 520;
+    const h = 52, gap = 8, bw = 520;
     const cont = this.continueLevel;
     const started = s.best.some((b) => b > 0);
     const sub = `CHAMBER ${String(cont + 1).padStart(2, '0')} - ${this.chambers[cont].name}`;
@@ -737,6 +790,8 @@ export class App {
     y += h + gap;
     const rsub = s.randomBestStreak > 0 ? `BEST STREAK ${s.randomBestStreak}` : 'ENDLESS GENERATED CHAMBERS';
     if (UI.button('random', R(x, y, bw, h), 'RANDOM TEST', { accent: PP.Exit, sub: rsub })) this.startRandom(true);
+    y += h + gap;
+    if (UI.button('playground', R(x, y, bw, h), 'PLAYGROUND', { accent: C(126, 196, 96), sub: 'FREE ROAM / AN INFINITE OUTDOOR WORLD' })) this.go(() => this.openPlayground());
     y += h + gap;
     const fsub = s.fightWins > 0 ? `${s.fightWins} WINS   BEST STREAK ${s.fightBest}` : 'DUEL YOUR EVIL TWIN';
     if (UI.button('fight', R(x, y, bw, h), 'FIGHT', { accent: C(255, 90, 100), sub: fsub })) this.startFight();
@@ -984,7 +1039,7 @@ export class App {
 
   /** UI that sits over the game fades to 20% while the cursor is over it, so it never hides the action. */
   hudAlpha(key, r) {
-    const hot = Input.inside && contains({ x: r.x - 10, y: r.y - 10, w: r.w + 20, h: r.h + 20 }, UI.mouse) && this.screen === 'play' && !this.paused;
+    const hot = Input.inside && contains({ x: r.x - 10, y: r.y - 10, w: r.w + 20, h: r.h + 20 }, UI.mouse) && (this.screen === 'play' || this.screen === 'playground') && !this.paused;
     const v = approach(this.fades[key] ?? 1, hot ? 0.2 : 1, this.dt * 6);
     this.fades[key] = v;
     return v;
@@ -1090,8 +1145,8 @@ export class App {
     g.rect(r.x + r.w - 64, r.y + 68, 32, 32, withAlpha(PP.BlueRamp[2], alpha));
   }
 
-  drawCrosshair() {
-    const g = this.g, w = this.world;
+  drawCrosshair(w = this.world) {
+    const g = this.g;
     if (!w.player || w.player.dead) return;
     const c = V(roundEven(UI.mouse.x / 2) * 2, roundEven(UI.mouse.y / 2) * 2);
     g.rect(c.x - 2, c.y - 2, 4, 4, WHITE);
