@@ -2,6 +2,22 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.20.0] - 2026-10-28
+
+### Changed
+- **The Playground is a real world now.** It is generated from noise instead of repeating one template: wetlands, meadows, forests, deserts and
+  snowy mountains blend into each other, with lakes, caves, lava at the bottom and a day/night and weather cycle. Rivers of caves open into
+  sinkholes you can drop into and ride a lift back out of.
+- **Portal toys to play with.** Gel bounce hills, orange-gel runways over pits, lift towers, lab ruins with a gel pad under a high ledge, and
+  **launch towers**: ride the lift to the top, put a portal on the tower wall and one on the ground, step off, and the fall flings you across a ravine.
+  Glowing **relics** are hidden on all of them and in the crystal caves; a pointer shows the nearest one, your count is saved, and long portal flights are
+  measured as a fling record.
+- **A new main menu.** The live game footage in the background is gone. It is a clean, static blueprint backdrop with a pair of big portals and a cube
+  passing through, one clear list of modes, and the same look on the other menu screens.
+
+### Fixed
+- The new menu and the playground's audio no longer break (a mistyped call and a missing panel function from the unfinished work are fixed).
+
 ## [2.19.0] - 2026-10-28
 
 ### Changed

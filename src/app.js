@@ -3,7 +3,7 @@ import {
   K, C, withAlpha, clamp, clamp01, approach, lerp, smoothStep, easeOutCubic, contains, V, R, roundEven, WHITE,
 } from './core.js';
 import { World, makeDef, emptyInput, GunMode, Sfx } from './world.js';
-import { PP, Sprites, COLORS, HATS, FACE_NAMES, OUTFIT_NAMES, DEFAULT_LOOK, cleanLook, PLAYER_H } from './art.js';
+import { PP, Sprites, COLORS, HATS, FACE_NAMES, OUTFIT_NAMES, DEFAULT_LOOK, cleanLook, PLAYER_H, PORTAL_FRAMES } from './art.js';
 import { Gfx, PixelFont } from './gfx.js';
 import { Renderer } from './render.js';
 import { Audio } from './audio.js';
@@ -15,9 +15,10 @@ import { GhostRecorder, GhostPlayback, SolutionGhost } from './ghost.js';
 import { Boss, ARENA_W, ARENA_H } from './boss.js';
 import { MapLibrary } from './library.js';
 import { pickRandomTest } from './random.js';
-import { PlaygroundWorld } from './playground.js';
+import { PlaygroundWorld, biomeAt, biomeName } from './playground.js';
 
-export const VERSION = '2.19.0';
+const hash2 = (a, b) => { let h = (Math.imul(a, 374761393) + Math.imul(b, 668265263)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+export const VERSION = '2.20.0';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 
@@ -159,6 +160,7 @@ export class App {
   openPlayground(seed) {
     this.setScreen('playground');
     this.playground = new PlaygroundWorld(seed);
+    this.pgCounted = 0;
     this.accumulator = 0; this.hitstop = 0; this.lead = V(0, 0);
     this.pend = { jump: false, use: false, blue: false, orange: false, cycle: false };
     this.followPlayer(0, true, this.playground);
@@ -167,27 +169,63 @@ export class App {
 
   updatePlayground(dt) {
     if (Input.pressed('Escape')) { this.paused = !this.paused; this.audio.click(); }
+    const w = this.playground;
     if (!this.paused) {
-      if (Input.pressed('KeyR')) { this.playground.respawn(); this.followPlayer(0, true, this.playground); }
-      this.step(this.playground, dt, this.readInput(), false);
-      this.followPlayer(dt, false, this.playground);
+      if (Input.pressed('KeyR')) { w.respawn(); this.followPlayer(0, true, w); }
+      this.step(w, dt, this.readInput(), false);
+      this.followPlayer(dt, false, w);
+      // remember what you found and your longest fling
+      const s = this.save;
+      if (w.relicCount > (this.pgCounted || 0)) { s.playgroundRelics = (s.playgroundRelics || 0) + w.relicCount - (this.pgCounted || 0); this.pgCounted = w.relicCount; s.store(); }
+      if (w.flingBest > (s.playgroundFling || 0)) { s.playgroundFling = Math.round(w.flingBest); s.store(); }
     } else this.audio.setScene({ laser: 0, portal: 0, speed: 0 });
     this.updateCam(dt);
   }
 
+  /** Screen position (UI units) of a world point, using the current camera. */
+  worldToUI(x, y) {
+    const c = this.cam;
+    return V(((x - c.target.x) * c.zoom + c.offset.x) / K.Px, ((y - c.target.y) * c.zoom + c.offset.y) / K.Px);
+  }
+
   drawPlayground() {
-    const g = this.g, w = this.playground, p = w.player;
-    const top = R(22, 20, 490, 82), bottom = R(22, K.ScreenH - 60, 1120, 38);
+    const g = this.g, w = this.playground, p = w.player, s = this.save;
+    const top = R(22, 20, 430, 96), bottom = R(22, K.ScreenH - 56, 1020, 34);
     g.opacity = this.hudAlpha('pg_top', top);
     UI.panel(top, 0.85);
-    UI.text('PLAYGROUND / FREE ROAM', V(40, 36), 22, PP.CreamHi);
+    const biome = biomeName(biomeAt(Math.floor(p.pos.x / K.Tile), w.seed)).toUpperCase();
     const hour = Math.floor(w.clock), minute = Math.floor(w.clock % 1 * 60);
-    const depth = Math.max(0, Math.floor(p.pos.y / K.Tile) - 28);
-    UI.text(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}   X ${Math.floor(p.pos.x / K.Tile)}   DEPTH ${depth}   SEED ${w.seed}`, V(40, 74), 14, PP.Cream);
+    const depth = Math.max(0, Math.floor(p.pos.y / K.Tile) - 34);
+    UI.text(biome, V(40, 34), 22, PP.CreamHi);
+    UI.text(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}   DEPTH ${depth}   ${w.rain > 0.1 ? 'STORM' : w.wind !== 0 ? 'WINDY' : 'CLEAR'}`, V(40, 66), 14, PP.Cream);
+    UI.text(`RELICS ${w.relicCount}   TOTAL ${s.playgroundRelics || 0}`, V(40, 88), 16, C(150, 240, 255));
+    if (w.flingBest > 0) UI.text(`FLING ${Math.round(w.flingBest)}`, V(top.x + top.w - 16, 88), 16, PP.Hazard, Align.Right);
     g.opacity = this.hudAlpha('pg_bottom', bottom);
     UI.panel(bottom, 0.75);
-    UI.text('A/D MOVE   SPACE JUMP / SWIM   MOUSE PORTALS   E CUBE   R HOME   ESC PAUSE', V(38, bottom.y + 12), 14, PP.Cream);
+    UI.text('A/D MOVE   SPACE JUMP / SWIM   MOUSE PORTALS   E CUBE   R HOME   ESC PAUSE', V(38, bottom.y + 10), 14, PP.Cream);
     g.opacity = 1;
+    // a pointer to the nearest relic you have not found yet
+    const near = w.nearestRelic();
+    if (near && !this.paused) {
+      const rl = near.relic, ui = this.worldToUI(rl.x, rl.y), m = 54;
+      const inside = ui.x > m && ui.x < K.ScreenW - m && ui.y > 150 && ui.y < K.ScreenH - 90;
+      const pt = inside ? V(ui.x, ui.y - 52) : V(clamp(ui.x, m, K.ScreenW - m), clamp(ui.y, 150, K.ScreenH - 90));
+      const a = 0.55 + 0.35 * Math.sin(this.time * 5), col = C(150, 240, 255, 255 * a);
+      if (inside) { for (let k = 0; k < 4; k++) g.rect(pt.x - 12 + k * 4, pt.y + k * 4, 24 - k * 8, 4, col); }
+      else {
+        const ang = Math.atan2(ui.y - K.ScreenH / 2, ui.x - K.ScreenW / 2);
+        for (let k = 0; k < 4; k++) g.rect(Math.round(pt.x - Math.cos(ang) * k * 6) - 6, Math.round(pt.y - Math.sin(ang) * k * 6) - 6, 12 - k * 2, 12 - k * 2, col);
+        UI.text(`${Math.round(near.dist / K.Tile)}`, V(pt.x, pt.y + 24), 14, col, Align.Center);
+      }
+    }
+    if (w.relicEvent && w.time - w.relicEvent.t < 2.6) {
+      const k = 1 - (w.time - w.relicEvent.t) / 2.6;
+      UI.textShadow(`RELIC ${w.relicEvent.count} FOUND`, V(K.ScreenW / 2, 170), 40, withAlpha(C(150, 240, 255), clamp01(k * 3)), Align.Center);
+    }
+    if (w.lastFling > 0 && w.time - w.flingT < 2.4) {
+      const k = 1 - (w.time - w.flingT) / 2.4;
+      UI.textShadow(`FLING  ${Math.round(w.lastFling)} TILES`, V(K.ScreenW / 2, 230), 46, withAlpha(PP.Hazard, clamp01(k * 3)), Align.Center);
+    }
     if (!this.paused) { this.drawCrosshair(w); return; }
     g.rect(0, 0, K.ScreenW, K.ScreenH, C(6, 8, 12, 170));
     const r = R(K.ScreenW / 2 - 250, 155, 500, 410);
@@ -196,9 +234,9 @@ export class App {
     const x = r.x + 30, bw = r.w - 60;
     if (UI.button('pg_resume', R(x, r.y + 92, bw, 52), 'RESUME')) this.paused = false;
     if (UI.button('pg_home', R(x, r.y + 154, bw, 52), 'RETURN HOME')) { w.respawn(); this.followPlayer(0, true, w); this.paused = false; }
-    if (UI.button('pg_new', R(x, r.y + 216, bw, 52), 'NEW WORLD')) this.go(() => this.openPlayground());
+    if (UI.button('pg_new', R(x, r.y + 216, bw, 52), 'NEW WORLD')) this.go(() => { this.pgCounted = 0; this.openPlayground(); });
     if (UI.button('pg_menu', R(x, r.y + 278, bw, 52), 'MAIN MENU')) this.go(() => this.setScreen('menu'));
-    UI.text('A NEW WORLD IS GENERATED EACH VISIT', V(K.ScreenW / 2, r.y + 370), 14, DIM, Align.Center);
+    UI.text(`SEED ${w.seed}   RELICS ARE GLOWING CRYSTALS. FOLLOW THE ARROW.`, V(K.ScreenW / 2, r.y + 370), 14, DIM, Align.Center);
   }
 
   // ================================================================ fight mode
@@ -494,8 +532,10 @@ export class App {
       laser = Math.max(laser, 1 - clamp(Math.hypot(p.pos.x - (s.a.x + dx * t), p.pos.y - (s.a.y + dy * t)) / 420, 0, 1));
     }
     if (w.linked) for (const q of w.portals) if (q) portal = Math.max(portal, (1 - clamp(Math.hypot(p.pos.x - q.center.x, p.pos.y - q.center.y) / 380, 0, 1)) * clamp01(q.open));
-    const speed = clamp((Math.hypot(p.vel.x, p.vel.y) - 500) / 900, 0, 1);
-    this.audio.setScene({ laser: laser * laser, portal: Math.min(1, portal), speed });
+const speed = clamp((Math.hypot(p.vel.x, p.vel.y) - 500) / 900, 0, 1);
+    const sc = { laser: laser * laser, portal: Math.min(1, portal), speed };
+    if (w.playground) { sc.wind = clamp(Math.abs(w.wind) * 0.7 + speed * 0.5, 0, 1); sc.rain = w.rain; }
+    this.audio.setScene(sc);
   }
 
   playZoom() {
@@ -703,16 +743,22 @@ export class App {
       else if (this.save.ghostOn && this.bestGhost && this.levelTime < this.bestGhost.duration + 1.5) { const pose = this.bestGhost.at(this.levelTime); if (pose) gh.push({ p: pose, kind: 'best' }); }
     }
     this.renderer.ghosts = gh;
-    this.renderer.prepareWindows(shown, this.cam, this.canvas);
-    g.clear(PP.Ink);
-    this.renderer.drawScene(shown, this.cam, eye);
-    if (this.screen === 'play' && !this.paused && this.world?.player) this.renderer.drawAimPreview(this.world, this.world.player);
-    if (inFight && !this.paused && this.fight.phase === 'fight' && shown.player && !shown.player.dead) this.renderer.drawAimPreview(shown, shown.player);
-    if (inPlayground && !this.paused) this.renderer.drawAimPreview(shown, shown.player);
-    if (this.screen === 'editor') this.editor?.drawOverlay();
-
-    g.identity();
-    if (this.screen !== 'editor' && !inPlayground) this.vignette();
+    const menuLike = ['menu', 'select', 'options', 'controls', 'character', 'mymaps', 'ending'].includes(this.screen);
+    if (menuLike) {
+      g.clear(PP.Ink);
+      g.identity();
+      this.drawBackdrop(this.screen === 'menu');
+    } else {
+      this.renderer.prepareWindows(shown, this.cam, this.canvas);
+      g.clear(PP.Ink);
+      this.renderer.drawScene(shown, this.cam, eye);
+      if (this.screen === 'play' && !this.paused && this.world?.player) this.renderer.drawAimPreview(this.world, this.world.player);
+      if (inFight && !this.paused && this.fight.phase === 'fight' && shown.player && !shown.player.dead) this.renderer.drawAimPreview(shown, shown.player);
+      if (inPlayground && !this.paused) this.renderer.drawAimPreview(shown, shown.player);
+      if (this.screen === 'editor') this.editor?.drawOverlay();
+      g.identity();
+    }
+    if (this.screen !== 'editor' && !inPlayground && !menuLike) this.vignette();
     switch (this.screen) {
       case 'menu': this.drawMenu(); break;
       case 'select': this.drawSelect(); break;
@@ -767,44 +813,62 @@ export class App {
     g.rect(Math.trunc(feet.x - size * 0.4), Math.trunc(feet.y) + 4, Math.trunc(size * 0.8), 6, C(0, 0, 0, 90));
   }
 
+  /** A calm, static backdrop for the menus: a blueprint grid, a pair of big portals with a cube passing through, a floor. */
+  drawBackdrop(full = true) {
+    const g = this.g, t = this.time, W = K.ScreenW, H = K.ScreenH;
+    g.rectGradV(0, 0, W, H, C(8, 12, 24), C(18, 22, 42));
+    for (let x = 0; x < W; x += 64) g.rect(x, 0, 2, H, C(60, 90, 140, x % 256 === 0 ? 30 : 14));
+    for (let y = 0; y < H; y += 64) g.rect(0, y, W, 2, C(60, 90, 140, y % 256 === 0 ? 30 : 14));
+    if (!full) return;      // the other screens just get the blueprint grid
+    const bx = 800, ox = 1130, py = 150;
+    g.additive = true;
+    g.circleGrad(bx, py + 160, 300, C(63, 167, 255, 70), C(63, 167, 255, 0));
+    g.circleGrad(ox, py + 160, 300, C(255, 138, 31, 62), C(255, 138, 31, 0));
+    for (let i = 0; i < 46; i++) {
+      const x = (hash2(i, 1) * W + t * (6 + hash2(i, 2) * 10)) % W, y = (hash2(i, 3) * H + Math.sin(t * 0.4 + i) * 12) % H;
+      g.rect(Math.round(x / 2) * 2, Math.round(y / 2) * 2, 2, 2, C(160, 200, 255, 40 + 40 * Math.sin(t * 1.3 + i)));
+    }
+    g.additive = false;
+    // floor
+    g.rect(0, 620, W, H - 620, C(20, 25, 40));
+    g.rect(0, 620, W, 4, C(52, 62, 90));
+    for (let x = 0; x < W; x += 128) g.rect(x, 624, 2, H - 624, C(14, 18, 30));
+    // the pair of portals, five times the size of the in-game sprites
+    const frame = Math.trunc(t * 10) % PORTAL_FRAMES;
+    g.tex(Sprites.portalVTex[0][1], frame * 12, 0, 12, 40, bx - 60, py, 120, 400);
+    g.tex(Sprites.portalVTex[1][1], frame * 12, 0, 12, 40, ox - 60, py, 120, 400);
+    // a cube drifts out of the blue portal, arcs over, and goes into the orange one, forever
+    const ph = (t * 0.22) % 1, cx = bx + 70 + ph * (ox - bx - 140), cy = py + 280 - Math.sin(ph * Math.PI) * 130;
+    const fade = Math.min(1, ph * 8, (1 - ph) * 8);
+    g.tex(Sprites.cubeTex, 0, 0, 16, 16, Math.round(cx / 4) * 4 - 32, Math.round(cy / 4) * 4 - 32, 64, 64, fade);
+    this.mascot(V(960, 620), 5, true);
+  }
+
   drawMenu() {
     const g = this.g, s = this.save;
-    // calm the busy background: a general dim plus a deeper shade behind the menu column
-    g.rect(0, 0, K.ScreenW, K.ScreenH, C(10, 11, 16, 70));
-    g.rectGradH(0, 0, 980, K.ScreenH, C(10, 11, 16, 250), C(10, 11, 16, 0));
     const intro = easeOutCubic(this.stateT * 2);
     const x = roundEven(80 - (1 - intro) * 40);
-    this.title(V(x, 60));
-    UI.text('A SIDE-SCROLLING TEST OF SPATIAL REASONING', V(x + 2, 236), 16, withAlpha(DIM, 0.8));
-    this.mascot(V(x + 990, 196), 4, true);
+    this.title(V(x, 44));
+    UI.text('A SIDE-SCROLLING TEST OF SPATIAL REASONING', V(x + 2, 214), 16, withAlpha(DIM, 0.9));
 
-    // Main modes, then the rest in one quiet row
-    let y = 280;
-    const h = 52, gap = 8, bw = 520;
-    const cont = this.continueLevel;
-    const started = s.best.some((b) => b > 0);
-    const sub = `CHAMBER ${String(cont + 1).padStart(2, '0')} - ${this.chambers[cont].name}`;
-    if (UI.button('play', R(x, y, bw, h), started ? 'CONTINUE' : 'BEGIN TESTING', { accent: PP.OrangeRamp[2], sub })) this.startLevel(cont);
-    y += h + gap;
-    const rsub = s.randomBestStreak > 0 ? `BEST STREAK ${s.randomBestStreak}` : 'ENDLESS GENERATED CHAMBERS';
-    if (UI.button('random', R(x, y, bw, h), 'RANDOM TEST', { accent: PP.Exit, sub: rsub })) this.startRandom(true);
-    y += h + gap;
-    if (UI.button('playground', R(x, y, bw, h), 'PLAYGROUND', { accent: C(126, 196, 96), sub: 'FREE ROAM / AN INFINITE OUTDOOR WORLD' })) this.go(() => this.openPlayground());
-    y += h + gap;
-    const fsub = s.bossWins > 0 ? `${s.bossWins} WON   BEST ${UI.formatTime(s.bossBest)}` : 'A GIANT MECH. TURN ITS SHELLS BACK ON IT';
-    if (UI.button('fight', R(x, y, bw, h), 'BOSS FIGHT', { accent: C(255, 90, 100), sub: fsub })) this.startFight();
-    y += h + gap;
-    const msub = this.library.maps.length > 0 ? `${this.library.maps.length} SAVED` : 'BUILD YOUR OWN CHAMBERS';
-    if (UI.button('builder', R(x, y, bw, h), 'MAP BUILDER', { accent: PP.BlueRamp[3], sub: msub })) this.go(() => this.openMyMaps());
-    y += h + 20;
-    const sw = (bw - 2 * gap) / 3;
+    const cont = this.continueLevel, started = s.best.some((b) => b > 0), done = s.best.filter((b) => b > 0).length;
+    const bw = 560, h = 60, gap = 8;
+    let y = 252;
+    const mode = (id, label, sub, accent, action) => { if (UI.button(id, R(x, y, bw, h), label, { accent, sub })) action(); y += h + gap; };
+    mode('play', started ? 'CONTINUE' : 'BEGIN TESTING', `CHAMBER ${String(cont + 1).padStart(2, '0')} - ${this.chambers[cont].name}`, PP.OrangeRamp[2], () => this.startLevel(cont));
+    mode('random', 'RANDOM TEST', s.randomBestStreak > 0 ? `BEST STREAK ${s.randomBestStreak}` : 'ENDLESS GENERATED CHAMBERS', PP.Exit, () => this.startRandom(true));
+    mode('playground', 'PLAYGROUND', s.playgroundRelics > 0 ? `${s.playgroundRelics} RELICS FOUND - FLING RECORD ${s.playgroundFling || 0}` : 'AN ENDLESS WORLD TO EXPLORE WITH PORTALS', C(126, 196, 96), () => this.go(() => this.openPlayground()));
+    mode('fight', 'BOSS FIGHT', s.bossWins > 0 ? `${s.bossWins} WON - BEST ${UI.formatTime(s.bossBest)}` : 'COLOSSUS, A GIANT MECH', C(255, 90, 100), () => this.startFight());
+    mode('builder', 'MAP BUILDER', this.library.maps.length > 0 ? `${this.library.maps.length} SAVED` : 'BUILD YOUR OWN CHAMBERS', PP.BlueRamp[3], () => this.go(() => this.openMyMaps()));
+    y += 6;
+    const sw = (bw - 3 * gap) / 4;
     if (UI.smallButton('select', R(x, y, sw, 48), 'CHAMBERS')) this.go(() => { this.selPage = -1; this.setScreen('select'); });
-    if (UI.smallButton('options', R(x + sw + gap, y, sw, 48), 'OPTIONS')) this.go(() => this.setScreen('options'));
-    if (UI.smallButton('controls', R(x + 2 * (sw + gap), y, sw, 48), 'CONTROLS')) this.go(() => this.setScreen('controls'));
+    if (UI.smallButton('character', R(x + sw + gap, y, sw, 48), 'CHARACTER')) this.go(() => this.setScreen('character'));
+    if (UI.smallButton('options', R(x + 2 * (sw + gap), y, sw, 48), 'OPTIONS')) this.go(() => this.setScreen('options'));
+    if (UI.smallButton('controls', R(x + 3 * (sw + gap), y, sw, 48), 'CONTROLS')) this.go(() => this.setScreen('controls'));
 
-    const done = s.best.filter((b) => b > 0).length;
-    UI.text(`${done}/${this.chambers.length} CHAMBERS COMPLETE`, V(x + 2, K.ScreenH - 30), 16, withAlpha(DIM, 0.8));
-    UI.text(`V${VERSION}`, V(K.ScreenW - 24, K.ScreenH - 30), 16, withAlpha(DIM, 0.5), Align.Right);
+    UI.text(`${done}/${this.chambers.length} CHAMBERS COMPLETE`, V(x + 2, K.ScreenH - 34), 16, withAlpha(DIM, 0.8));
+    UI.text(`V${VERSION}`, V(K.ScreenW - 24, K.ScreenH - 34), 16, withAlpha(DIM, 0.6), Align.Right);
   }
 
   header(title, sub, backTo = 'menu') {

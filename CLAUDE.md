@@ -59,6 +59,19 @@ it catches a shell so it can't trap you. `tests/boss.mjs` plays it with a bot th
 timing or geometry, because it is the proof the fight is beatable. Fight records are `save.bossWins` / `save.bossBest` (the old duel's `fight*` fields are unused).
 The world hooks `World.extra` / `fightHooks` from the retired duel are still there but unused.
 
+## Playground
+
+`src/playground.js` generates the endless world: `generateChunk(index, seed)` is a pure function (80-column chunks, 96 rows) built from noise: `biomeAt`,
+`naturalSurface`, caves, sinkholes with a lift and a relic chamber, lava below row 88, and structures (park, lab, tower, fling, bounce, speed) placed in
+two slots per chunk, never within 10 columns of a chunk edge so seams stay smooth. `PlaygroundWorld` streams cubes and lifts per chunk and tracks relics and
+fling distance. `src/playground-art.js` draws it. `node tests/playground.mjs` must pass, and it plays the launch tower course, so any change to that
+structure's geometry has to keep it solvable (portal high on the tower wall, portal on the ground, step off, land on the mesa). `tests/playground.html`
+is a browser check of the rendering.
+
+## Main menu
+
+The menu screens draw `App.drawBackdrop()` (a static blueprint scene), not the menu world. Do not put live game footage behind menus.
+
 ## Ghosts, par times and new tiles
 
 - `data/solutions.json` + `data/pars.json` come from the C# reference solutions: after re-exporting levels run `node tools/make-solutions.mjs`

@@ -56,7 +56,7 @@ export class Audio {
     this.ambientSource = src;
   }
 
-  /** Continuous layers whose volume follows the scene: beam hum, portal hum, and wind rush that rises with speed. */
+  /** Continuous layers whose volume follows the scene: beam hum, portal hum, wind rush that rises with speed. */
   startLoops() {
     const mk = (name, rate = 1) => {
       const src = this.ctx.createBufferSource();
@@ -70,18 +70,24 @@ export class Audio {
       return { src, gain };
     };
     this.loops = { laser: mk('laserHum'), portal: mk('portalHum'), wind: mk('wind') };
+    this.rainLayer = mk('rain');
   }
 
-  /** laser / portal / speed are 0..1: how close the nearest beam and portal are, and how fast the player is moving. */
+  /** laser / portal / speed / rain / wind are 0..1: how close the nearest beam and portal are, how fast the
+    // player is moving, and how heavy the storm is. */
   setScene(sc) {
     if (!this.ready || !this.loops) return;
     const t = this.ctx.currentTime;
     const L = this.loops;
     L.laser.gain.gain.setTargetAtTime(sc.laser * 0.11 * this.sfxVolume, t, 0.08);
     L.portal.gain.gain.setTargetAtTime(sc.portal * 0.13 * this.sfxVolume, t, 0.1);
-    L.wind.gain.gain.setTargetAtTime(sc.speed * 0.16 * this.sfxVolume, t, 0.12);
-    L.wind.src.playbackRate.setTargetAtTime(0.75 + sc.speed * 0.7, t, 0.1);
-    L.portal.src.playbackRate.setTargetAtTime(0.92 + sc.portal * 0.1 + sc.speed * 0.15, t, 0.15);
+    L.wind.gain.gain.setTargetAtTime((sc.wind || sc.speed) * 0.16 * this.sfxVolume, t, 0.12);
+    L.wind.src.playbackRate.setTargetAtTime(0.75 + (sc.wind || sc.speed) * 0.7, t, 0.1);
+    L.portal.src.playbackRate.setTargetAtTime(0.92 + sc.portal * 0.1 + (sc.wind || sc.speed) * 0.15, t, 0.15);
+    if (this.rainLayer) {
+      this.rainLayer.gain.gain.setTargetAtTime((sc.rain || 0) * 0.18 * this.ambienceVolume, t, 0.2);
+      this.rainLayer.src.playbackRate.setTargetAtTime(0.9 + (sc.rain || 0) * 0.3, t, 0.2);
+    }
   }
 
   /** Dull the whole mix, then let it open back up. */
@@ -123,6 +129,7 @@ export class Audio {
     add('laserHum', this.gen(1, (t) => (this.saw(100) * 0.5 + this.saw(200) * 0.25 + this.sine(300) * 0.25) * (0.8 + 0.2 * Math.sin(TAU * 4 * t)) * 0.5));
     add('portalHum', this.gen(1, (t) => (this.sine(220) * 0.5 + this.sine(330) * 0.3 + this.sine(440) * 0.12) * (0.75 + 0.25 * Math.sin(TAU * 2 * t)) * 0.6));
     add('wind', this.windLoop());
+    add('rain', this.rainLoop());
   }
 
   makeBuffer(data) {
@@ -259,6 +266,21 @@ export class Audio {
     let a = 0, b = 0;
     for (let i = 0; i < n; i++) { a += (this.noise() - a) * 0.12; b += (a - b) * 0.12; d[i] = (a - b) * 3.2; }
     const x = 2000;   // fade the seam so the loop does not tick
+    for (let i = 0; i < x; i++) { const k = i / x; d[i] = d[i] * k + d[n - x + i] * (1 - k) * (1 - k); }
+    return d;
+  }
+  rainLoop() {
+    // hiss of rain: band-passed noise with a slow swell so it breathes instead of roaring
+    const n = 2 * SR, d = new Float32Array(n);
+    let lp = 0, bp = 0;
+    for (let i = 0; i < n; i++) {
+      const t = i / SR;
+      const lfo = 0.55 + 0.45 * Math.sin(TAU * t / 1.7);
+      lp += (this.noise() - lp) * 0.05;
+      bp += (lp - bp) * 0.08;
+      d[i] = bp * 3.4 * lfo;
+    }
+    const x = 2000;
     for (let i = 0; i < x; i++) { const k = i / x; d[i] = d[i] * k + d[n - x + i] * (1 - k) * (1 - k); }
     return d;
   }

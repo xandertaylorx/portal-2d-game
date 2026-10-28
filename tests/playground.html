@@ -22,22 +22,24 @@ try {
   const check = (ok, text) => { if (!ok) throw new Error(text); };
   const scene = (name) => {
     app.openPlayground(1234);
-    const w = app.playground, ch = w.chunk(0), T = K.Tile;
+    const w = app.playground, T = K.Tile;
+    const find = (pred) => { for (let i = -400; i < 400; i++) { const c = w.chunk(i), r = pred(c); if (r) return r; } };
     if (name === 'Night') w.time = DAY_SECONDS / 2;
-    if (name === 'Lab') w.player.pos = V(21 * T, (ch.roomY + 14) * T - 15);
-    if (name === 'Cave') w.player.pos = V(53 * T, 78 * T);
+    if (name === 'Lab') { const r = find((c) => { const s = c.structures.find((q) => q.kind === 'lab'); return s && { c, s }; }); w.player.pos = V((r.c.start + r.s.x0 + 5) * T, r.s.fy * T - 15); }
+    if (name === 'Cave') { const r = find((c) => c.chambers.length && c); const ch = r.chambers[0]; w.player.pos = V((ch.x + 4) * T, (ch.y + ch.ry - 1) * T); }
     if (name === 'Water') {
-      let lake;
-      for (let i = 1; i < 20; i++) if (w.chunk(i).lake) { lake = w.chunk(i); break; }
-      w.player.pos = V((lake.start + 58.5) * T, (lake.base + 3) * T);
+      const r = find((c) => { for (let x = 6; x < 74; x++) if (c.surface[x] > 41 && c.surface[x - 3] > 40 && c.surface[x + 3] > 40) return { c, x }; });
+      w.player.pos = V((r.c.start + r.x + 0.5) * T, 40 * T);
     }
     if (name === 'Portals') {
-      const lab = w.buildPortal(1, V(16, ch.roomY + 14), V(0, -1), V(16.75 * T, (ch.roomY + 14) * T));
-      const ground = w.buildPortal(0, V(36, ch.base), V(0, -1), V(36.75 * T, ch.base * T));
-      check(lab && ground, 'test portals must fit');
-      lab.open = ground.open = 1; lab.age = ground.age = 2;
-      w.portals = [ground, lab];
-      w.player.pos = V(33 * T, ch.base * T - 15);
+      const r = find((c) => { const s = c.structures.find((q) => q.kind === 'fling'); return s && { c, s }; });
+      const ax = (x) => r.c.start + x, fy = r.s.fy;
+      const blue = w.buildPortal(0, V(ax(r.s.x0 + 7), fy), V(0, -1), V(ax(r.s.x0 + 8) * T, fy * T));
+      const orange = w.buildPortal(1, V(ax(r.s.x0 + 6), fy - 12), V(1, 0), V(ax(r.s.x0 + 7) * T, (fy - 11.5) * T));
+      check(blue && orange, 'test portals must fit');
+      blue.open = orange.open = 1; blue.age = orange.age = 2;
+      w.portals = [blue, orange];
+      w.player.pos = V((ax(r.s.x0 + 9) + 0.5) * T, fy * T - 15);
     }
     for (let i = 0; i < 30; i++) w.update(K.SimDt, emptyInput());
     w.events.length = 0;
