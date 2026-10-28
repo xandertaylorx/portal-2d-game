@@ -19,7 +19,8 @@ export class SaveData {
     this.cones = true; this.shake = true; this.fullscreen = false;
     this.totalDeaths = 0; this.randomBestStreak = 0; this.randomCleared = 0;
     this.oneClickPortals = false; this.editorHelpSeen = false;
-    this.fightWins = 0; this.fightBest = 0; this.fightStreak = 0;   // fight mode records
+    this.fightWins = 0; this.fightBest = 0; this.fightStreak = 0;   // (old duel mode, no longer used)
+    this.bossWins = 0; this.bossBest = 0;                           // boss fight: victories and best time in seconds
     this.ghostOn = true;         // show the ghost of your best run
     this.ghosts = {};            // best-run recordings keyed by chamber name
     this.medals = {};            // 1 bronze, 2 silver, 3 gold, keyed by chamber name
@@ -67,7 +68,8 @@ export class SaveData {
       }
     }
     if (inc.medals && typeof inc.medals === 'object') for (const [n, m] of Object.entries(inc.medals)) if (m > (this.medals[n] || 0) && m <= 3) this.medals[n] = m;
-    for (const k of ['totalDeaths', 'randomBestStreak', 'randomCleared', 'fightWins', 'fightBest']) if (typeof inc[k] === 'number' && inc[k] > (this[k] || 0)) this[k] = inc[k];
+    for (const k of ['totalDeaths', 'randomBestStreak', 'randomCleared', 'fightWins', 'fightBest', 'bossWins']) if (typeof inc[k] === 'number' && inc[k] > (this[k] || 0)) this[k] = inc[k];
+    if (typeof inc.bossBest === 'number' && inc.bossBest > 0 && (!(this.bossBest > 0) || inc.bossBest < this.bossBest)) this.bossBest = inc.bossBest;
     for (const k of ['master', 'sfx', 'ambience', 'cones', 'shake', 'oneClickPortals', 'ghostOn']) if (typeof inc[k] === typeof this[k]) this[k] = inc[k];
     if (inc.look && typeof inc.look === 'object') this.look = cleanLook(inc.look);
     if (Array.isArray(doc.maps)) {

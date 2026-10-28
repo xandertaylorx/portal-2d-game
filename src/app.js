@@ -12,12 +12,12 @@ import { Input } from './input.js';
 import { SaveData, CustomMap, CustomMaps } from './maps.js';
 import { MapEditor } from './editor.js';
 import { GhostRecorder, GhostPlayback, SolutionGhost } from './ghost.js';
-import { Fight, ARENA_W, ARENA_H } from './fight.js';
+import { Boss, ARENA_W, ARENA_H } from './boss.js';
 import { MapLibrary } from './library.js';
 import { pickRandomTest } from './random.js';
 import { PlaygroundWorld } from './playground.js';
 
-export const VERSION = '2.18.0';
+export const VERSION = '2.19.0';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 
@@ -206,7 +206,7 @@ export class App {
   startFight() {
     this.go(() => {
       this.fight?.dispose();
-      this.fight = new Fight(this.save, {
+      this.fight = new Boss(this.save, {
         event: (e) => {
           this.audio.play(e.sound, e.pos, this.camPos, e.pitch);
           if (this.save.shake) { this.shake = Math.max(this.shake, e.shake); if (e.freeze) this.fight.freeze = Math.max(this.fight.freeze || 0, e.freeze); }
@@ -226,23 +226,21 @@ export class App {
 
   updateFight(dt) {
     const f = this.fight;
-    if (Input.pressed('Escape') && f.phase !== 'matchEnd') { this.paused = !this.paused; this.audio.click(); }
+    if (Input.pressed('Escape') && f.phase !== 'won') { this.paused = !this.paused; this.audio.click(); }
     this.camPos = V(ARENA_W * K.Tile / 2, ARENA_H * K.Tile / 2);
     if (!this.paused) {
-      const inp = this.readInput();
-      inp.fireBolt = Input.down('KeyQ') || Input.down('ShiftLeft') || Input.down('ShiftRight');
-      f.update(dt, inp);
+      f.update(dt, this.readInput());
       this.renderer.extraLights = f.lights();
       this.audioScene(f.world);
     } else this.audio.setScene({ laser: 0, portal: 0, speed: 0 });
-    if (f.phase === 'matchEnd' && (Input.pressed('Enter') || Input.pressed('NumpadEnter'))) this.startFight();
+    if (f.phase === 'won' && (Input.pressed('Enter') || Input.pressed('NumpadEnter'))) this.startFight();
     this.updateCam(dt, K.Px);
   }
 
   drawFight() {
     const f = this.fight, g = this.g;
     f.drawHud(g, UI, Align);
-    if (f.phase === 'matchEnd') this.drawFightEnd();
+    if (f.phase === 'won') this.drawFightEnd();
     else if (this.paused) this.drawFightPause();
     else this.drawCrosshair(f.world);
   }
@@ -261,15 +259,15 @@ export class App {
   drawFightEnd() {
     const f = this.fight, g = this.g, a = clamp01(f.phaseT * 3);
     g.rect(0, 0, K.ScreenW, K.ScreenH, C(6, 8, 12, 170 * a));
-    const r = R(K.ScreenW / 2 - 290, K.ScreenH / 2 - 200, 580, 400);
-    const win = f.matchWon;
-    UI.panel(r, a, win ? PP.Exit : C(220, 50, 70));
-    UI.textShadow(win ? 'VICTORY' : 'DEFEATED', V(K.ScreenW / 2, r.y + 70), 72, withAlpha(win ? PP.Exit : C(255, 90, 80), a), Align.Center);
-    UI.text(win ? 'YOUR EVIL TWIN WANTS A REMATCH. IT HAS LEARNED.' : 'YOUR EVIL TWIN WALKS AWAY.', V(K.ScreenW / 2, r.y + 130), 16, withAlpha(DIM, a), Align.Center);
-    UI.text(`ROUNDS ${f.wins} - ${f.losses}`, V(K.ScreenW / 2, r.y + 176), 30, withAlpha(PP.CreamHi, a), Align.Center);
-    UI.text(`WIN STREAK ${f.streak}   BEST ${this.save.fightBest}   TOTAL WINS ${this.save.fightWins}`, V(K.ScreenW / 2, r.y + 220), 16, withAlpha(PP.Cream, a), Align.Center);
-    if (UI.button('f_again', R(r.x + 36, r.y + 280, 240, 60), win ? 'NEXT FIGHT' : 'REMATCH', { accent: PP.OrangeRamp[2] })) this.startFight();
-    if (UI.button('f_quit', R(r.x + 304, r.y + 280, 240, 60), 'MAIN MENU')) this.go(() => this.setScreen('menu'));
+    const r = R(K.ScreenW / 2 - 290, K.ScreenH / 2 - 210, 580, 420);
+    UI.panel(r, a, PP.Exit);
+    UI.textShadow('COLOSSUS DESTROYED', V(K.ScreenW / 2, r.y + 64), 46, withAlpha(PP.Exit, a), Align.Center);
+    UI.text(f.firstWin ? 'YOU BEAT IT WITH ITS OWN AMMUNITION.' : 'THE MECH IS SCRAP AGAIN.', V(K.ScreenW / 2, r.y + 112), 16, withAlpha(DIM, a), Align.Center);
+    UI.text(UI.formatTime(f.time), V(K.ScreenW / 2, r.y + 150), 60, withAlpha(PP.CreamHi, a), Align.Center);
+    if (f.newBest) UI.text('NEW BEST TIME', V(K.ScreenW / 2, r.y + 216), 16, withAlpha(PP.Hazard, a), Align.Center);
+    UI.text(`HEARTS LEFT ${f.hearts}   ATTEMPTS ${f.attempts}   BEST ${UI.formatTime(this.save.bossBest)}   VICTORIES ${this.save.bossWins}`, V(K.ScreenW / 2, r.y + 250), 16, withAlpha(PP.Cream, a), Align.Center);
+    if (UI.button('f_again', R(r.x + 36, r.y + 312, 240, 60), 'FIGHT AGAIN', { accent: PP.OrangeRamp[2] })) this.startFight();
+    if (UI.button('f_quit', R(r.x + 304, r.y + 312, 240, 60), 'MAIN MENU')) this.go(() => this.setScreen('menu'));
   }
 
 
@@ -334,7 +332,7 @@ export class App {
 
   update(dt) {
     const playing = (this.screen === 'play' || this.screen === 'complete') && this.world != null;
-    const wantHidden = (this.screen === 'playground' && !this.paused) || (this.screen === 'play' && !this.paused && this.world?.player && !this.world.player.dead) || (this.screen === 'fight' && !this.paused && this.fight?.phase !== 'matchEnd');
+    const wantHidden = (this.screen === 'playground' && !this.paused) || (this.screen === 'play' && !this.paused && this.world?.player && !this.world.player.dead) || (this.screen === 'fight' && !this.paused && this.fight?.phase !== 'won');
     if (!!wantHidden !== this.cursorHidden) {
       this.canvas.style.cursor = wantHidden ? 'none' : 'default';
       this.cursorHidden = !!wantHidden;
@@ -793,8 +791,8 @@ export class App {
     y += h + gap;
     if (UI.button('playground', R(x, y, bw, h), 'PLAYGROUND', { accent: C(126, 196, 96), sub: 'FREE ROAM / AN INFINITE OUTDOOR WORLD' })) this.go(() => this.openPlayground());
     y += h + gap;
-    const fsub = s.fightWins > 0 ? `${s.fightWins} WINS   BEST STREAK ${s.fightBest}` : 'DUEL YOUR EVIL TWIN';
-    if (UI.button('fight', R(x, y, bw, h), 'FIGHT', { accent: C(255, 90, 100), sub: fsub })) this.startFight();
+    const fsub = s.bossWins > 0 ? `${s.bossWins} WON   BEST ${UI.formatTime(s.bossBest)}` : 'A GIANT MECH. TURN ITS SHELLS BACK ON IT';
+    if (UI.button('fight', R(x, y, bw, h), 'BOSS FIGHT', { accent: C(255, 90, 100), sub: fsub })) this.startFight();
     y += h + gap;
     const msub = this.library.maps.length > 0 ? `${this.library.maps.length} SAVED` : 'BUILD YOUR OWN CHAMBERS';
     if (UI.button('builder', R(x, y, bw, h), 'MAP BUILDER', { accent: PP.BlueRamp[3], sub: msub })) this.go(() => this.openMyMaps());

@@ -14,7 +14,7 @@ const BOSS_X = (PIT_L + PIT_R) / 2;           // 512
 const CORE = V(BOSS_X, 196), CORE_R = 44;     // the hatch on top of the dome
 const GRAV = 600;
 const MAX_HP = 100, HIT = 12;
-const HEARTS = 5;
+const HEARTS = 6;
 
 /** The arena: two ledges of portal panels over a pit of goo, a ceiling panel above the mech, cubes and dodge platforms. */
 export function bossArena() {
@@ -48,7 +48,7 @@ export class Boss {
     this.hearts = HEARTS; this.invuln = 0; this.hurtFlash = 0;
     this.shells = []; this.waves = []; this.puffs = [];
     this.hatch = 0; this.hatchT = 0; this.flash = 0; this.recoil = [0, 0]; this.eye = 1; this.slam = 0;
-    this.nextShell = 4.5; this.nextWave = 7; this.nextPurge = 16; this.purgeWarn = 0; this.second = 0;
+    this.blueClose = 0; this.nextShell = 4.5; this.nextWave = 7; this.nextPurge = 16; this.purgeWarn = 0; this.second = 0;
     this.fightT = 0; this.phaseT = 0; this.phase = 'intro'; this.rise = 1; this.message = ''; this.msgT = 0; this.freeze = 0;
     this.pend = { jump: false, use: false, blue: false, orange: false, cycle: false }; this.acc = 0;
     this.dying = 0; this.matchWon = false; this.shown = new Set();
@@ -76,11 +76,11 @@ export class Boss {
 
   fireShells() {
     const p = this.player, side = p.pos.x < BOSS_X ? -1 : 1;
-    const flight = this.stage === 1 ? 1.7 : this.stage === 2 ? 1.5 : 1.3;
+    const flight = this.stage === 1 ? 1.8 : this.stage === 2 ? 1.6 : 1.5;
     const edge = side < 0 ? [40, PIT_L - 40] : [PIT_R + 40, ARENA_W * T - 40];
     const tx = clamp(p.pos.x, edge[0], edge[1]);
     this.lob(tx, flight, side);
-    if (this.stage === 3 && Math.random() < 0.6) {
+    if (this.stage === 3 && Math.random() < 0.4) {
       // a second shell a little further along: one portal can take only one of them
       const alt = tx + (tx - edge[0] > (edge[1] - edge[0]) / 2 ? -150 : 150);
       this.second = 0.45; this.secondTx = clamp(alt, edge[0], edge[1]); this.secondSide = side; this.secondFlight = flight;
@@ -120,7 +120,7 @@ export class Boss {
     this.world.fx.burst(CORE, C(255, 200, 90), 60, 520, 0.9, 4);
     this.world.fx.burst(CORE, C(255, 255, 255), 24, 300, 0.5, 3);
     if (this.hp <= 0) { this.phase = 'dying'; this.dying = 0; this.say('COLOSSUS DOWN', 4); return; }
-    if (this.stage > before) { this.checkpoint = this.hp; this.say(this.stage === 2 ? 'PHASE 2: SHOCKWAVES' : 'PHASE 3: PORTAL PURGE'); }
+    if (this.stage > before) { this.checkpoint = this.hp; this.hearts = Math.min(HEARTS, this.hearts + 1); this.say(this.stage === 2 ? 'PHASE 2: SHOCKWAVES' : 'PHASE 3: PORTAL PURGE'); }
     else this.say('DIRECT HIT!', 1.4);
   }
 
@@ -155,6 +155,7 @@ export class Boss {
             const sp = Math.hypot(nv.x, nv.y);
             s.x = np.x + q.normal.x * 6; s.y = np.y + q.normal.y * 6; s.vx = q.normal.x * sp; s.vy = q.normal.y * sp; s.portalCd = 0.08; s.reflected = true; s.trail.length = 0;
             p.pulse = 1; q.pulse = 1;
+            this.blueClose = 0.8;      // the landing-spot portal burns out right after it catches a shell, so it can't trap you
             w.fx.burst(p.center, k === 0 ? PP.BlueRamp[3] : PP.OrangeRamp[3], 14, 220, 0.3, 3);
             w.fx.burst(q.center, k === 0 ? PP.OrangeRamp[3] : PP.BlueRamp[3], 14, 220, 0.3, 3);
             w.emit(Sfx.Teleport, q.center, 2);
@@ -248,7 +249,7 @@ export class Boss {
       // the boss only wastes shells on a player who is on a ledge
       this.nextShell -= dt;
       if (this.nextShell <= 0) {
-        this.nextShell = this.stage === 1 ? 5.2 : this.stage === 2 ? 4.4 : 3.8;
+        this.nextShell = this.stage === 1 ? 5.6 : this.stage === 2 ? 5.0 : 4.6;
         this.fireShells();
       }
       if (this.stage >= 2) {
@@ -257,12 +258,17 @@ export class Boss {
       }
       if (this.stage === 3) {
         this.nextPurge -= dt;
-        if (this.nextPurge <= 0 && this.purgeWarn <= 0) { this.purgeWarn = 1.4; this.say('PORTAL PURGE!', 1.4); this.world.emit(Sfx.Fizzle, V(BOSS_X, 220), 4); }
+        if (this.nextPurge <= 0 && this.purgeWarn <= 0) { this.purgeWarn = 1.8; this.say('PORTAL PURGE!', 1.8); this.world.emit(Sfx.Fizzle, V(BOSS_X, 220), 4); }
         if (this.purgeWarn > 0) { this.purgeWarn -= dt; if (this.purgeWarn <= 0) { this.nextPurge = 13; this.world.clearPlayerPortals(); this.hooks.shake?.(8); } }
       }
       if (this.second > 0) { this.second -= dt; if (this.second <= 0) this.lob(this.secondTx, this.secondFlight, this.secondSide); }
     }
     if (this.hatchPlan) { this.hatchPlan.delay -= dt; if (this.hatchPlan.delay <= 0) { this.hatchT = this.hatchPlan.open; this.hatchPlan = null; this.world.emit(Sfx.DoorOpen, V(CORE.x, CORE.y), 2); if (!this.shown.has('hatch')) { this.shown.add('hatch'); this.tip('THE HATCH IS OPEN! SEND THE SHELL INTO IT.', 4); } } }
+    if (this.blueClose > 0) {
+      this.blueClose -= dt;
+      const b = this.world.portals[0];
+      if (this.blueClose <= 0 && b) { this.world.fx.burst(b.center, PP.BlueRamp[2], 24, 220, 0.5, 3); this.world.portals[0] = null; }
+    }
     if (this.hatchT > 0) this.hatchT -= dt;
     this.hatch = clamp(this.hatch + (this.hatchT > 0 ? 6 : -4) * dt, 0, 1);
     this.updateShells(dt);

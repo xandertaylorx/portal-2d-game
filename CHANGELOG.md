@@ -2,6 +2,20 @@
 
 All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [2.19.0] - 2026-10-28
+
+### Changed
+- **Fight mode is now a boss fight.** The evil-twin duel is gone. You face **COLOSSUS**, a giant mech in a pit between two ledges, and your portal gun
+  is the only thing that can hurt it. It lobs mortar shells at where you stand and shows a red marker where each will land. When it fires, the hatch on
+  top of its head vents open for a few seconds: put a blue portal on the floor at the marker and an orange one on the glowing ceiling panel above the
+  mech, and its own shell drops straight down its own hatch. Cubes block shells.
+- Three phases: shockwaves you have to jump, then a portal purge that fizzles your portals and twin shells. You have six hearts, get one back at each
+  phase, and restart from the start of the phase you died in. Best time and victories are saved.
+- The Main Menu button is now BOSS FIGHT.
+
+### Fixed
+- The refreshed main menu no longer crashes on drawing its cards, and the in-game audio no longer breaks from a mistyped method name.
+
 ## [2.18.0] - 2026-10-25
 
 ### Changed

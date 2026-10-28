@@ -16,20 +16,23 @@ function play(seed) {
     shootWait -= 1 / 60;
     if (boss.phase === 'fight' && !p.dead) {
       const left = p.pos.x < 512;
-      const home = left ? 260 : 760;
-      let want = home;
       const live = boss.shells.filter((s) => !s.reflected);
-      for (const s of live) if (Math.abs(p.pos.x - s.land) < 130) want = p.pos.x + (p.pos.x < s.land ? -140 : 140);   // keep clear of landing spots
-      const blue = w.portals[0];                       // do not stand on your own portal: it drops you into the pit
-      if (blue && Math.abs(want - blue.center.x) < 100) want = blue.center.x + (left ? (blue.center.x > 260 ? -110 : 110) : (blue.center.x > 760 ? -110 : 110));
-      want = Math.max(left ? 170 : 700, Math.min(left ? 340 : 860, want));
+      const blue = w.portals[0];
+      // stand somewhere that is clear of your own floor portal and of every shell's landing spot
+      const spots = (left ? [150, 210, 270, 335] : [690, 750, 810, 870]);
+      const lands = live.map((sh) => sh.land); if (boss.second > 0) lands.push(boss.secondTx);   // a second shell is about to be fired
+      const ok = spots.filter((x) => (!blue || Math.abs(x - blue.center.x) > 90) && lands.every((l) => Math.abs(x - l) > 130));
+      const pool = ok.length ? ok : spots;
+      const want = pool.reduce((m, x) => (Math.abs(x - p.pos.x) < Math.abs(m - p.pos.x) ? x : m));
       inp.moveX = Math.abs(want - p.pos.x) > 14 ? Math.sign(want - p.pos.x) : 0;
+      // hop over your own floor portal when you have to cross it
+      if (blue && p.onGround && inp.moveX !== 0 && Math.abs(p.pos.x - blue.center.x) < 80 && Math.sign(blue.center.x - p.pos.x) === inp.moveX) { inp.jumpPressed = true; inp.jumpHeld = true; }
       for (const wv of boss.waves) if (wv.wait <= 0 && Math.abs(wv.x - p.pos.x) < 70 && Math.sign(p.pos.x - wv.x) === wv.dir && p.onGround) { inp.jumpPressed = true; inp.jumpHeld = true; }   // hop shockwaves
       const orange = w.portals[1];
       if (!orange && shootWait <= 0 && boss.purgeWarn <= 0) { inp.aimWorld = { x: 512, y: 20 }; inp.fireOrange = true; shootWait = 0.5; }   // the exit portal on the ceiling above the mech
       else if (shootWait <= 0) {
         const s = live.find((q) => !handled.has(q));
-        if (s && s.age > 0.15) { inp.aimWorld = { x: s.land, y: LEDGE_Y + 2 }; inp.fireBlue = true; handled.add(s); shootWait = 0.4; }     // blue where the shell lands
+        if (s && s.age > 0.15 && Math.abs(p.pos.x - s.land) > 90) { inp.aimWorld = { x: s.land, y: LEDGE_Y + 2 }; inp.fireBlue = true; handled.add(s); shootWait = 0.4; }     // blue where the shell lands
       }
     }
     boss.update(1 / 60, inp);
