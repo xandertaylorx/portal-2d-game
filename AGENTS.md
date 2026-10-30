@@ -1,7 +1,7 @@
-# Portal 2D: notes for Codex
+# Hole Punch (formerly Portal 2D): notes for Codex
 
 Pixel-art portal puzzler that runs in the browser: plain JavaScript modules on a 640x360 canvas, no bundler, no
-dependencies. Live at https://xandertaylorx.github.io/portal-2d-game/ (GitHub Pages). See README.md for the architecture.
+dependencies. Live at https://portal.crooli.com (also xandertaylorx.github.io/portal-2d-game/) (GitHub Pages). See README.md for the architecture.
 
 The original C# + Raylib desktop version is frozen in `OLD-DESKTOP/` (see its README). Don't add features there.
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/media/banner.png" alt="Portal 2D" width="100%">
+  <img src="docs/media/banner.png" alt="Hole Punch" width="100%">
 </p>
 
 <p align="center">
@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.20.0-ff8a1f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-2.20.1-ff8a1f?style=flat-square">
   <img alt="JavaScript" src="https://img.shields.io/badge/plain-JavaScript-3fa7ff?style=flat-square">
   <img alt="platforms" src="https://img.shields.io/badge/play-in%20your%20browser-5ee08a?style=flat-square">
   <img alt="license" src="https://img.shields.io/badge/license-PolyForm%20Strict-d97757?style=flat-square">
@@ -65,7 +65,7 @@
 
 ## Play
 
-**[xandertaylorx.github.io/portal-2d-game](https://xandertaylorx.github.io/portal-2d-game/)**: the whole game,
+**[portal.crooli.com](https://portal.crooli.com)**: the whole game,
 including the map builder, Random Test and featured maps. It needs a keyboard and mouse, so open it on a computer.
 Progress, your maps and your character are saved in the browser. Maps are shared as links that open straight into the
 game.
@@ -161,5 +161,4 @@ You may download, play and study the game for free, for any **non-commercial** p
 use it commercially, modify it, or redistribute the code or builds without written permission. All rights not
 granted are reserved.
 
-*Portal 2D is an independent fan project. It is not affiliated with or endorsed by Valve Corporation. "Portal" is a
-trademark of Valve Corporation.*
+*Hole Punch is an independent project inspired by puzzle games with linked portals. It is not affiliated with or endorsed by Valve Corporation.*

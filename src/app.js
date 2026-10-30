@@ -18,7 +18,7 @@ import { pickRandomTest } from './random.js';
 import { PlaygroundWorld, biomeAt, biomeName } from './playground.js';
 
 const hash2 = (a, b) => { let h = (Math.imul(a, 374761393) + Math.imul(b, 668265263)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
-export const VERSION = '2.20.0';
+export const VERSION = '2.20.1';
 const DIM = C(150, 158, 172);
 const PANEL_EDGE_C = C(58, 65, 80);
 
@@ -144,7 +144,7 @@ export class App {
       try {
         if (file.size > 20e6) throw new Error('too big');
         const r = this.save.mergeFile(JSON.parse(await file.text()));
-        if (!r) { this.showToast('THAT IS NOT A PORTAL 2D PROGRESS FILE'); return; }
+        if (!r) { this.showToast('THAT IS NOT A HOLE PUNCH PROGRESS FILE'); return; }
         const s = this.save;
         this.audio.master = s.master; this.audio.sfxVolume = s.sfx; this.audio.ambienceVolume = s.ambience; this.audio.applyVolumes();
         this.renderer.windowsEnabled = s.cones;
@@ -795,12 +795,13 @@ const speed = clamp((Math.hypot(p.vel.x, p.vel.y) - 500) / 900, 0, 1);
 
   title(pos) {
     const g = this.g;
-    UI.textShadow('PORTAL', pos, 130, PP.CreamHi);
-    const m = UI.measure('PORTAL', 130);
-    UI.textShadow('2D', V(pos.x + m.x + 36, pos.y), 130, PP.OrangeRamp[2]);
+    UI.textShadow('HOLE', pos, 130, PP.CreamHi);
+    const m = UI.measure('HOLE', 130);
+    UI.textShadow('PUNCH', V(pos.x + m.x + 36, pos.y), 130, PP.OrangeRamp[2]);
+    const w = m.x + 36 + UI.measure('PUNCH', 130).x;
     const y = pos.y + m.y + 18;
-    g.rect(Math.trunc(pos.x), Math.trunc(y), Math.trunc(m.x * 0.48), 6, PP.BlueRamp[2]);
-    g.rect(Math.trunc(pos.x + m.x * 0.52), Math.trunc(y), Math.trunc(m.x * 0.48), 6, PP.OrangeRamp[2]);
+    g.rect(Math.trunc(pos.x), Math.trunc(y), Math.trunc(w * 0.48), 6, PP.BlueRamp[2]);
+    g.rect(Math.trunc(pos.x + w * 0.52), Math.trunc(y), Math.trunc(w * 0.48), 6, PP.OrangeRamp[2]);
   }
 
   /** The hero, big, for menus. */

@@ -1,6 +1,11 @@
 # Changelog
 
-All notable changes to Portal 2D are listed here. Versions follow [semantic versioning](https://semver.org).
+All notable changes to Hole Punch (formerly Portal 2D) are listed here. Versions follow [semantic versioning](https://semver.org).
+
+## [2.20.1] - 2026-10-30
+
+### Changed
+- **The game is now called Hole Punch.** New title on the main menu and the page. Your saves, maps, progress files and share codes all keep working.
 
 ## [2.20.0] - 2026-10-28
 
